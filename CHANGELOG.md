@@ -12,6 +12,35 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.0-beta.1] — 2026-03-05
+
+### Added
+- **Color Value field well** — an optional second measure that drives ribbon color
+  via a continuous gradient scale, independent of the primary Value that controls
+  ribbon width. Typical uses: conversion rate, margin %, churn rate — any metric
+  where "is the big flow also the good flow?" matters.
+
+  When the **Color Value** field is populated:
+  - Ribbons are colored by a linear gradient scale mapped to the weighted-average
+    color value per link (weighted by primary flow volume, so rate-type metrics
+    are aggregated correctly across rows sharing the same source → target pair).
+  - Nodes retain their existing report-theme colors.
+  - Hover tooltips include the color value alongside the flow volume.
+  - Removing the field reverts ribbons to theme colors with no other change.
+
+- **Color Scale format card** — controls for the color encoding:
+  - **Scheme** — *Sequential* (low → high, default) or *Diverging* (low — mid — high).
+  - **Low / Mid / High Color** pickers — defaults are light blue / near-white /
+    dark blue; Mid Color applies only to the Diverging scheme.
+  - **Legend Position** — a compact gradient legend (field name, color bar, min/max
+    labels) is drawn in one of four corners: Bottom Right (default), Bottom Left,
+    Top Right, or Top Left. The legend is fixed outside the zoom layer so it stays
+    visible while the diagram is panned or zoomed.
+  - **Show Color Scale** header toggle — disables color encoding and hides the
+    legend without removing the Color Value field from the data model.
+
+---
+
 ## [1.1.0-beta.1] — 2026-03-05
 
 ### Changed

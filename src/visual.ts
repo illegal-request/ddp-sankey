@@ -18,10 +18,11 @@ import {
 } from "d3-sankey";
 import { select, Selection } from "d3-selection";
 import { zoom, zoomIdentity, ZoomBehavior } from "d3-zoom";
+import { scaleLinear } from "d3-scale";
 
 import "./../style/visual.less";
 
-// ─── Data types ──────────────────────────────────────────────────────────────
+// ─── Data types ───────────────────────────────────────────────────────────────
 
 interface NodeDatum {
     name:  string;   // level-prefixed key, e.g. "0\x01North"  (internal, unique across levels)
@@ -31,36 +32,37 @@ interface NodeDatum {
 interface LinkDatum {
     source: number;
     target: number;
-    value: number;
+    value:  number;
 }
 
-type LayoutNode = SankeyNode<NodeDatum, LinkDatum>;
-type LayoutLink = SankeyLink<NodeDatum, LinkDatum>;
+type LayoutNode  = SankeyNode<NodeDatum, LinkDatum>;
+type LayoutLink  = SankeyLink<NodeDatum, LinkDatum>;
 type LayoutGraph = SankeyGraph<NodeDatum, LinkDatum>;
 
-// ─── Visual ──────────────────────────────────────────────────────────────────
+// ─── Visual ───────────────────────────────────────────────────────────────────
 
 export class Visual implements IVisual {
-    private host: IVisualHost;
-    private svg: Selection<SVGSVGElement, unknown, null, undefined>;
-    private zoomLayer: Selection<SVGGElement, unknown, null, undefined>;
-    private container: Selection<SVGGElement, unknown, null, undefined>;
-    private errorText: Selection<SVGTextElement, unknown, null, undefined>;
+    private host:        IVisualHost;
+    private svg:         Selection<SVGSVGElement,  unknown, null, undefined>;
+    private zoomLayer:   Selection<SVGGElement,    unknown, null, undefined>;
+    private container:   Selection<SVGGElement,    unknown, null, undefined>;
+    private legendLayer: Selection<SVGGElement,    unknown, null, undefined>;
+    private errorText:   Selection<SVGTextElement, unknown, null, undefined>;
     private zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>;
 
     private formattingSettingsService: FormattingSettingsService;
     private formattingSettings: VisualFormattingSettingsModel;
 
-    private selectionManager: powerbi.extensibility.ISelectionManager;
-    private selectionType: "none" | "node" | "link" = "none";
-    private selectedKey: string = "";
+    private selectionManager:  powerbi.extensibility.ISelectionManager;
+    private selectionType:     "none" | "node" | "link" = "none";
+    private selectedKey:       string = "";
     private currentLinkOpacity: number = 0.45;
 
     constructor(options: VisualConstructorOptions) {
         this.host = options.host;
         this.formattingSettingsService = new FormattingSettingsService();
-        this.formattingSettings = new VisualFormattingSettingsModel();
-        this.selectionManager = options.host.createSelectionManager();
+        this.formattingSettings        = new VisualFormattingSettingsModel();
+        this.selectionManager          = options.host.createSelectionManager();
 
         this.svg = select(options.element)
             .append<SVGSVGElement>("svg")
@@ -75,13 +77,18 @@ export class Visual implements IVisual {
             .append<SVGGElement>("g")
             .classed("container", true);
 
+        // legendLayer sits outside zoomLayer so it stays fixed while the diagram pans/zooms
+        this.legendLayer = this.svg
+            .append<SVGGElement>("g")
+            .classed("legendLayer", true);
+
         this.errorText = this.svg
             .append<SVGTextElement>("text")
             .classed("errorText", true)
-            .attr("text-anchor", "middle")
+            .attr("text-anchor",      "middle")
             .attr("dominant-baseline", "middle")
-            .attr("fill", "#999")
-            .attr("font-size", "14px")
+            .attr("fill",       "#999")
+            .attr("font-size",  "14px")
             .attr("font-family", "sans-serif");
 
         // Zoom: scroll to zoom, drag to pan, double-click to reset
@@ -114,38 +121,51 @@ export class Visual implements IVisual {
 
         this.svg.attr("width", width).attr("height", height);
         this.container.selectAll("*").remove();
+        this.legendLayer.selectAll("*").remove();
         this.errorText.text("");
 
-        // ── Populate formatting settings from the format pane ─────────────────
+        // ── Populate formatting settings from the format pane ──────────────────
         this.formattingSettings = this.formattingSettingsService
             .populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews[0]);
 
-        const { nodeSettings, linkSettings, labelSettings, valueSettings } = this.formattingSettings;
-        const nodeWidth   = Math.max(4,  nodeSettings.nodeWidth.value);
-        const nodePadding = Math.max(2,  nodeSettings.nodePadding.value);
+        const {
+            nodeSettings, linkSettings, labelSettings,
+            valueSettings, colorScaleSettings
+        } = this.formattingSettings;
+
+        const nodeWidth   = Math.max(4, nodeSettings.nodeWidth.value);
+        const nodePadding = Math.max(2, nodeSettings.nodePadding.value);
         const linkOpacity = Math.min(1, Math.max(0, linkSettings.linkOpacity.value / 100));
+
         const showLabels  = labelSettings.show.value;
         const fontFamily  = labelSettings.fontControl.fontFamily.value;
         const fontSize    = Math.max(8, labelSettings.fontControl.fontSize.value);
-        const bold        = labelSettings.fontControl.bold?.value    ?? false;
-        const italic      = labelSettings.fontControl.italic?.value  ?? false;
+        const bold        = labelSettings.fontControl.bold?.value      ?? false;
+        const italic      = labelSettings.fontControl.italic?.value    ?? false;
         const underline   = labelSettings.fontControl.underline?.value ?? false;
-        const fontColor   = labelSettings.fontColor.value?.value ?? "#333333";
+        const fontColor   = labelSettings.fontColor.value?.value       ?? "#333333";
 
         const showValues  = valueSettings.show.value;
         const valuePos    = String(valueSettings.position.value?.value  ?? "auto");
         const valueTarget = String(valueSettings.target.value?.value    ?? "nodes");
         const vFontFamily = valueSettings.fontControl.fontFamily.value;
         const vFontSize   = Math.max(8, valueSettings.fontControl.fontSize.value);
-        const vBold       = valueSettings.fontControl.bold?.value    ?? false;
-        const vItalic     = valueSettings.fontControl.italic?.value  ?? false;
+        const vBold       = valueSettings.fontControl.bold?.value      ?? false;
+        const vItalic     = valueSettings.fontControl.italic?.value    ?? false;
         const vUnderline  = valueSettings.fontControl.underline?.value ?? false;
-        const vFontColor  = valueSettings.fontColor.value?.value ?? "#333333";
+        const vFontColor  = valueSettings.fontColor.value?.value       ?? "#333333";
+
+        const showColorScale = colorScaleSettings.show.value;
+        const colorScheme    = String(colorScaleSettings.scheme.value?.value         ?? "sequential");
+        const csLowColor     = colorScaleSettings.lowColor.value?.value              ?? "#c6dbef";
+        const csMidColor     = colorScaleSettings.midColor.value?.value              ?? "#f7f7f7";
+        const csHighColor    = colorScaleSettings.highColor.value?.value             ?? "#08519c";
+        const legendPos      = String(colorScaleSettings.legendPosition.value?.value ?? "bottom-right");
 
         this.currentLinkOpacity = linkOpacity;
 
-        // ── Guard: no data ────────────────────────────────────────────────────
-        const dataView   = options.dataViews?.[0];
+        // ── Guard: no data ─────────────────────────────────────────────────────
+        const dataView    = options.dataViews?.[0];
         const categorical = dataView?.categorical;
 
         if (!categorical?.categories?.length || !categorical.values?.length) {
@@ -154,21 +174,36 @@ export class Visual implements IVisual {
         }
 
         // categorical.categories is ordered by field-well position (top → left in visual)
-        const levelCats   = categorical.categories;
-        const valueSeries = categorical.values[0];
-
+        const levelCats = categorical.categories;
         if (levelCats.length < 2) {
             this.showError(width, height, "Add at least 2 Path Level columns and a Value.");
             return;
         }
 
-        // ── Parse rows → aggregate links, build selection ID maps ─────────────
+        // Identify value series by data role — colorValue is optional
+        let valueSeries: powerbi.DataViewValueColumn | undefined;
+        let colorSeries: powerbi.DataViewValueColumn | undefined;
+        for (const s of categorical.values) {
+            if (s.source.roles?.["value"])      valueSeries = s;
+            if (s.source.roles?.["colorValue"]) colorSeries = s;
+        }
+
+        if (!valueSeries) {
+            this.showError(width, height, "Add 2 or more Path Level columns and a Value to get started.");
+            return;
+        }
+
+        // ── Parse rows → aggregate links, build selection ID maps ──────────────
         // Blank/null values are treated as the label "(Blank)" rather than dropped.
-        const linkMap    = new Map<string, number>();
-        const nodeSet    = new Set<string>();
-        const nodeSelIds = new Map<string, powerbi.visuals.ISelectionId[]>();
-        const linkSelIds = new Map<string, powerbi.visuals.ISelectionId[]>();
-        const rowCount   = levelCats[0].values.length;
+        const linkMap            = new Map<string, number>();
+        const nodeSet            = new Set<string>();
+        const nodeSelIds         = new Map<string, powerbi.visuals.ISelectionId[]>();
+        const linkSelIds         = new Map<string, powerbi.visuals.ISelectionId[]>();
+        // For color value: accumulate weighted sum + total weight (= primary value)
+        // so the per-link color value is a weighted average (weight = flow volume).
+        const linkColorWeightSum = new Map<string, number>();
+        const linkColorWeight    = new Map<string, number>();
+        const rowCount           = levelCats[0].values.length;
 
         for (let r = 0; r < rowCount; r++) {
             const val = Number(valueSeries.values[r]) || 0;
@@ -184,8 +219,8 @@ export class Visual implements IVisual {
             // Pre-compute a disambiguated node key for every level in this row.
             // Non-blank: "${level}\x01${label}"            — same label at same level merges (intentional)
             // Blank:     "${level}\x01(Blank)\x02${parentKey}" — unique per parent path
-            const levelKeys: string[] = [];
-            const levelRaws: (string | null)[] = [];
+            const levelKeys: string[]        = [];
+            const levelRaws: (string|null)[] = [];
             for (let lvl = 0; lvl < levelCats.length; lvl++) {
                 const raw = (String(levelCats[lvl].values[r] ?? "").trim()) || null;
                 levelRaws[lvl] = raw;
@@ -193,7 +228,7 @@ export class Visual implements IVisual {
                     levelKeys[lvl] = `${lvl}\x01${raw}`;
                 } else {
                     const parentKey = lvl > 0 ? levelKeys[lvl - 1] : "root";
-                    levelKeys[lvl] = `${lvl}\x01(Blank)\x02${parentKey}`;
+                    levelKeys[lvl]  = `${lvl}\x01(Blank)\x02${parentKey}`;
                 }
             }
 
@@ -216,6 +251,15 @@ export class Visual implements IVisual {
                 nodeSelIds.get(tgtKey)!.push(selId);
                 if (!linkSelIds.has(lnkKey)) linkSelIds.set(lnkKey, []);
                 linkSelIds.get(lnkKey)!.push(selId);
+
+                // Accumulate color value (weighted average by primary flow volume)
+                if (colorSeries) {
+                    const cv = Number(colorSeries.values[r]);
+                    if (!isNaN(cv)) {
+                        linkColorWeightSum.set(lnkKey, (linkColorWeightSum.get(lnkKey) ?? 0) + cv * val);
+                        linkColorWeight.set(lnkKey,    (linkColorWeight.get(lnkKey)    ?? 0) + val);
+                    }
+                }
             }
         }
 
@@ -224,19 +268,53 @@ export class Visual implements IVisual {
             return;
         }
 
-        // ── Build Sankey input ────────────────────────────────────────────────
+        // Compute weighted-average color value per link key
+        const linkColorMap = new Map<string, number>();
+        linkColorWeightSum.forEach((wsum, key) => {
+            const wtotal = linkColorWeight.get(key) ?? 0;
+            if (wtotal > 0) linkColorMap.set(key, wsum / wtotal);
+        });
+
+        // ── Build color scale ──────────────────────────────────────────────────
+        const hasColorScale = !!colorSeries && showColorScale && linkColorMap.size > 0;
+        let colorScaleFn: ((v: number) => string) | undefined;
+        let colorMin = 0;
+        let colorMax = 1;
+
+        if (hasColorScale) {
+            const cvals = Array.from(linkColorMap.values());
+            colorMin = Math.min(...cvals);
+            colorMax = Math.max(...cvals);
+            if (colorMin === colorMax) colorMax = colorMin + 1; // avoid degenerate scale
+
+            if (colorScheme === "diverging") {
+                const mid = (colorMin + colorMax) / 2;
+                const sc  = scaleLinear<string>()
+                    .domain([colorMin, mid, colorMax])
+                    .range([csLowColor, csMidColor, csHighColor]);
+                colorScaleFn = v => sc(v);
+            } else {
+                const sc = scaleLinear<string>()
+                    .domain([colorMin, colorMax])
+                    .range([csLowColor, csHighColor]);
+                colorScaleFn = v => sc(v);
+            }
+        }
+
+        // ── Build Sankey input ─────────────────────────────────────────────────
         const nodeArray = Array.from(nodeSet);
         const nodeIndex = new Map<string, number>(nodeArray.map((n, i) => [n, i]));
 
         const nodes: NodeDatum[] = nodeArray.map(key => {
             const afterLevel = key.slice(key.indexOf("\x01") + 1);
-            // Blank keys are suffixed with \x02parentKey for parent-path disambiguation — strip it
-            const blankSep   = afterLevel.indexOf("\x02");
+            // Blank keys are suffixed with \x02parentKey for disambiguation — strip it
+            const blankSep = afterLevel.indexOf("\x02");
             return {
                 name:  key,
                 label: blankSep === -1 ? afterLevel : afterLevel.slice(0, blankSep)
             };
         });
+
         const links: LinkDatum[] = [];
         linkMap.forEach((value, key) => {
             const sep    = key.indexOf("\x00");
@@ -270,17 +348,17 @@ export class Visual implements IVisual {
         // Use report theme colours keyed by display label so the same name gets the same colour
         const color = (label: string): string => this.host.colorPalette.getColor(label).value;
 
-        // ── Downstream selection helpers ──────────────────────────────────────
+        // ── Downstream selection helpers ───────────────────────────────────────
         //
-        // When a node is clicked:  emphasise the node + every node/ribbon
-        //   reachable by following links forward (downstream).
-        // When a ribbon is clicked: emphasise the ribbon's source node, the
-        //   ribbon itself, and every node/ribbon downstream of the target node.
-        // Everything else is de-emphasised to 15 % opacity.
+        // When a node is clicked: emphasise the node + every node/ribbon reachable
+        //   by following links forward (downstream).
+        // When a ribbon is clicked: emphasise the ribbon's source node, the ribbon
+        //   itself, and every node/ribbon downstream of the ribbon's target node.
+        // Everything else de-emphasises to 15 % opacity.
         //
         // downstreamSet  – names of all nodes in the highlighted downstream path
-        // linkSourceNode – for a ribbon click, the name of its source node
-        //   (kept separate because it is upstream of the BFS start)
+        // linkSourceNode – for a ribbon click, the source node (upstream of BFS start
+        //   but still highlighted)
 
         let downstreamSet  = new Set<string>();
         let linkSourceNode = "";
@@ -295,7 +373,7 @@ export class Visual implements IVisual {
                 startName = this.selectedKey;
             } else {
                 // Link: BFS from the target; remember the source separately
-                const parts   = this.selectedKey.split("\x00");
+                const parts    = this.selectedKey.split("\x00");
                 linkSourceNode = parts[0];
                 startName      = parts[1];
             }
@@ -335,16 +413,23 @@ export class Visual implements IVisual {
             return downstreamSet.has(src) ? linkOpacity : linkOpacity * 0.15;
         };
 
-        // Minimum ribbon height: tall enough to contain the largest active text.
-        // Uses the label font size (if labels are on) and/or the value font size
-        // (if values are on), plus 4 px padding (2 px each side), so text never
-        // appears clipped inside a thin ribbon. Ribbon proportionality is
-        // intentionally relaxed — small-value flows are scaled up to this floor.
+        // Minimum ribbon height: tall enough to contain the largest active text label.
         const minRibbonHeight = Math.max(
             1,
             showLabels ? fontSize  + 4 : 1,
             showValues ? vFontSize + 4 : 1
         );
+
+        // Ribbon stroke color: color scale (if active) else theme color by source label
+        const ribbonColor = (d: LayoutLink): string => {
+            if (colorScaleFn) {
+                const src = (d.source as LayoutNode).name;
+                const tgt = (d.target as LayoutNode).name;
+                const cv  = linkColorMap.get(`${src}\x00${tgt}`);
+                if (cv !== undefined) return colorScaleFn(cv);
+            }
+            return color((d.source as LayoutNode).label);
+        };
 
         // ── Links ─────────────────────────────────────────────────────────────
         const linkPaths = this.container
@@ -355,16 +440,23 @@ export class Visual implements IVisual {
             .data(graph.links)
             .join("path")
             .attr("d", sankeyLinkHorizontal())
-            .attr("stroke", d => color((d.source as LayoutNode).label))
+            .attr("stroke",       ribbonColor)
             .attr("stroke-width", d => Math.max(minRibbonHeight, d.width ?? 1))
-            .attr("opacity", d => linkOpacityFn(d))
+            .attr("opacity",      d => linkOpacityFn(d))
             .style("cursor", "pointer");
 
         linkPaths
             .append("title")
-            .text(d =>
-                `${(d.source as LayoutNode).label} → ${(d.target as LayoutNode).label}\n${d.value.toLocaleString()}`
-            );
+            .text(d => {
+                const src  = (d.source as LayoutNode).name;
+                const tgt  = (d.target as LayoutNode).name;
+                const cv   = linkColorMap.get(`${src}\x00${tgt}`);
+                const base = `${(d.source as LayoutNode).label} \u2192 ${(d.target as LayoutNode).label}\n${d.value.toLocaleString()}`;
+                if (cv !== undefined && colorSeries) {
+                    return `${base}\n${colorSeries.source.displayName}: ${cv.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+                }
+                return base;
+            });
 
         linkPaths.on("click", (event: MouseEvent, d: LayoutLink) => {
             const lk = `${(d.source as LayoutNode).name}\x00${(d.target as LayoutNode).name}`;
@@ -414,21 +506,21 @@ export class Visual implements IVisual {
         if (showLabels) {
             nodeGroups
                 .append("text")
-                .attr("x", d => (d.x0 ?? 0) < innerW / 2 ? (d.x1 ?? 0) + 6 : (d.x0 ?? 0) - 6)
-                .attr("y", d => ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2)
+                .attr("x",  d => (d.x0 ?? 0) < innerW / 2 ? (d.x1 ?? 0) + 6 : (d.x0 ?? 0) - 6)
+                .attr("y",  d => ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2)
                 .attr("dy",              "0.35em")
                 .attr("text-anchor",     d => (d.x0 ?? 0) < innerW / 2 ? "start" : "end")
                 .attr("font-family",     fontFamily)
                 .attr("font-size",       `${fontSize}px`)
-                .attr("font-weight",     bold    ? "bold"      : "normal")
-                .attr("font-style",      italic  ? "italic"    : "normal")
+                .attr("font-weight",     bold      ? "bold"      : "normal")
+                .attr("font-style",      italic    ? "italic"    : "normal")
                 .attr("text-decoration", underline ? "underline" : "none")
                 .attr("fill",            fontColor)
                 .attr("pointer-events",  "none")
                 .text(d => d.label);
         }
 
-        // ── Value labels — nodes ──────────────────────────────────────────────
+        // ── Value labels — nodes ───────────────────────────────────────────────
         if (showValues && valueTarget === "nodes") {
             nodeGroups
                 .append("text")
@@ -445,7 +537,7 @@ export class Visual implements IVisual {
                     if (inside) return midY;
                     return showLabels ? midY + fontSize + 4 : midY;
                 })
-                .attr("dy",              "0.35em")
+                .attr("dy",          "0.35em")
                 .attr("text-anchor", d => {
                     const nh     = (d.y1 ?? 0) - (d.y0 ?? 0);
                     const inside = valuePos === "inside" || (valuePos === "auto" && nh >= vFontSize * 1.5);
@@ -462,7 +554,7 @@ export class Visual implements IVisual {
                 .text(d => (d.value ?? 0).toLocaleString());
         }
 
-        // ── Value labels — ribbons ────────────────────────────────────────────
+        // ── Value labels — ribbons ─────────────────────────────────────────────
         if (showValues && valueTarget === "ribbons") {
             this.container
                 .append("g")
@@ -477,7 +569,7 @@ export class Visual implements IVisual {
                     const tgtX0 = (d.target as LayoutNode).x0 ?? 0;
                     return (srcX1 + tgtX0) / 2;
                 })
-                .attr("y", d => (d.y0 + d.y1) / 2)
+                .attr("y",           d => (d.y0 + d.y1) / 2)
                 .attr("dy",          "0.35em")
                 .attr("text-anchor", "middle")
                 .attr("font-family",     vFontFamily)
@@ -487,6 +579,98 @@ export class Visual implements IVisual {
                 .attr("text-decoration", vUnderline ? "underline" : "none")
                 .attr("fill",            vFontColor)
                 .text(d => d.value.toLocaleString());
+        }
+
+        // ── Color scale legend ─────────────────────────────────────────────────
+        if (hasColorScale && colorScaleFn) {
+            const fieldName = colorSeries!.source.displayName;
+            const barW      = 150;
+            const barH      = 14;
+            const lPad      = 8;
+            const legendW   = barW + lPad * 2;
+            const titleH    = 13;
+            const labelH    = 12;
+            const legendH   = lPad + titleH + 4 + barH + 4 + labelH + lPad;
+
+            let lx: number, ly: number;
+            switch (legendPos) {
+                case "top-left":    lx = 8;                   ly = 8;                    break;
+                case "top-right":   lx = width - legendW - 8; ly = 8;                    break;
+                case "bottom-left": lx = 8;                   ly = height - legendH - 8; break;
+                default:            lx = width - legendW - 8; ly = height - legendH - 8; break; // bottom-right
+            }
+
+            // SVG gradient definition
+            const gradId = "colorScaleGrad";
+            const defs   = this.legendLayer.append("defs");
+            const grad   = defs.append("linearGradient")
+                .attr("id", gradId)
+                .attr("x1", "0%").attr("x2", "100%")
+                .attr("y1", "0%").attr("y2", "0%");
+
+            // 11 colour stops across the full range
+            for (let i = 0; i <= 10; i++) {
+                const t = i / 10;
+                const v = colorMin + t * (colorMax - colorMin);
+                grad.append("stop")
+                    .attr("offset",     `${i * 10}%`)
+                    .attr("stop-color", colorScaleFn(v));
+            }
+
+            const legendG = this.legendLayer
+                .append("g")
+                .attr("transform", `translate(${lx},${ly})`);
+
+            // Background panel
+            legendG.append("rect")
+                .attr("width",        legendW)
+                .attr("height",       legendH)
+                .attr("rx",           4)
+                .attr("fill",         "white")
+                .attr("fill-opacity", 0.85)
+                .attr("stroke",       "#ccc")
+                .attr("stroke-width", 0.5);
+
+            // Field name title
+            legendG.append("text")
+                .attr("x",           legendW / 2)
+                .attr("y",           lPad + titleH - 2)
+                .attr("text-anchor", "middle")
+                .attr("font-family", "sans-serif")
+                .attr("font-size",   "11px")
+                .attr("fill",        "#333")
+                .text(fieldName);
+
+            // Gradient bar
+            const barY = lPad + titleH + 4;
+            legendG.append("rect")
+                .attr("x",      lPad)
+                .attr("y",      barY)
+                .attr("width",  barW)
+                .attr("height", barH)
+                .attr("fill",   `url(#${gradId})`)
+                .attr("rx",     2);
+
+            // Min / max value labels
+            const labelY = barY + barH + 4 + labelH - 2;
+
+            legendG.append("text")
+                .attr("x",           lPad)
+                .attr("y",           labelY)
+                .attr("text-anchor", "start")
+                .attr("font-family", "sans-serif")
+                .attr("font-size",   "10px")
+                .attr("fill",        "#555")
+                .text(colorMin.toLocaleString(undefined, { maximumFractionDigits: 2 }));
+
+            legendG.append("text")
+                .attr("x",           lPad + barW)
+                .attr("y",           labelY)
+                .attr("text-anchor", "end")
+                .attr("font-family", "sans-serif")
+                .attr("font-size",   "10px")
+                .attr("fill",        "#555")
+                .text(colorMax.toLocaleString(undefined, { maximumFractionDigits: 2 }));
         }
     }
 

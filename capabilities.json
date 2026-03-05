@@ -10,7 +10,13 @@
       "displayName": "Value",
       "name": "value",
       "kind": "Measure",
-      "description": "Flow weight or volume"
+      "description": "Flow weight or volume — drives ribbon width"
+    },
+    {
+      "displayName": "Color Value",
+      "name": "colorValue",
+      "kind": "Measure",
+      "description": "Optional second measure that colors ribbons via a gradient scale (e.g. conversion rate, margin %)"
     }
   ],
   "dataViewMappings": [
@@ -18,7 +24,8 @@
       "conditions": [
         {
           "pathLevels": { "min": 1 },
-          "value": { "max": 1 }
+          "value": { "max": 1 },
+          "colorValue": { "max": 1 }
         }
       ],
       "categorical": {
@@ -27,7 +34,10 @@
           "dataReductionAlgorithm": { "window": { "count": 10000 } }
         },
         "values": {
-          "select": [{ "bind": { "to": "value" } }]
+          "select": [
+            { "bind": { "to": "value" } },
+            { "bind": { "to": "colorValue" } }
+          ]
         }
       }
     }
@@ -137,6 +147,47 @@
         "fontColor": {
           "displayName": "Font Color",
           "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "colorScaleSettings": {
+      "displayName": "Color Scale",
+      "properties": {
+        "show": {
+          "displayName": "Show Color Scale",
+          "type": { "bool": true }
+        },
+        "scheme": {
+          "displayName": "Scheme",
+          "type": {
+            "enumeration": [
+              { "displayName": "Sequential", "value": "sequential" },
+              { "displayName": "Diverging",  "value": "diverging"  }
+            ]
+          }
+        },
+        "lowColor": {
+          "displayName": "Low Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "midColor": {
+          "displayName": "Mid Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "highColor": {
+          "displayName": "High Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        },
+        "legendPosition": {
+          "displayName": "Legend Position",
+          "type": {
+            "enumeration": [
+              { "displayName": "Bottom Right", "value": "bottom-right" },
+              { "displayName": "Bottom Left",  "value": "bottom-left"  },
+              { "displayName": "Top Right",    "value": "top-right"    },
+              { "displayName": "Top Left",     "value": "top-left"     }
+            ]
+          }
         }
       }
     }

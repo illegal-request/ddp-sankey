@@ -180,13 +180,87 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     public slices = [this.target, this.position, this.fontControl, this.fontColor];
 }
 
+// ─── Color Scale card ─────────────────────────────────────────────────────────
+
+const schemeItems = [
+    { displayName: "Sequential", value: "sequential" },
+    { displayName: "Diverging",  value: "diverging"  }
+];
+
+const legendPositionItems = [
+    { displayName: "Bottom Right", value: "bottom-right" },
+    { displayName: "Bottom Left",  value: "bottom-left"  },
+    { displayName: "Top Right",    value: "top-right"    },
+    { displayName: "Top Left",     value: "top-left"     }
+];
+
+class ColorScaleSettingsCard extends formattingSettings.SimpleCard {
+    public name:        string = "colorScaleSettings";
+    public displayName: string = "Color Scale";
+
+    // Card-level toggle — collapses the card when off
+    public show = new formattingSettings.ToggleSwitch({
+        name: "show",
+        displayName: "Show Color Scale",
+        description: "Apply a color gradient to ribbons based on the Color Value field",
+        value: true
+    });
+
+    public scheme = new formattingSettings.ItemDropdown({
+        name: "scheme",
+        displayName: "Scheme",
+        description: "Sequential: low → high in one direction. Diverging: low — mid — high.",
+        items: schemeItems,
+        value: schemeItems[0]   // default: Sequential
+    });
+
+    public lowColor = new formattingSettings.ColorPicker({
+        name: "lowColor",
+        displayName: "Low Color",
+        description: "Color assigned to the minimum Color Value",
+        value: { value: "#c6dbef" }   // light blue
+    });
+
+    public midColor = new formattingSettings.ColorPicker({
+        name: "midColor",
+        displayName: "Mid Color",
+        description: "Midpoint color for diverging schemes",
+        value: { value: "#f7f7f7" }   // near-white
+    });
+
+    public highColor = new formattingSettings.ColorPicker({
+        name: "highColor",
+        displayName: "High Color",
+        description: "Color assigned to the maximum Color Value",
+        value: { value: "#08519c" }   // dark blue
+    });
+
+    public legendPosition = new formattingSettings.ItemDropdown({
+        name: "legendPosition",
+        displayName: "Legend Position",
+        description: "Corner of the visual where the color scale legend is displayed",
+        items: legendPositionItems,
+        value: legendPositionItems[0]   // default: Bottom Right
+    });
+
+    public topLevelSlice = this.show;
+    public slices = [this.scheme, this.lowColor, this.midColor, this.highColor, this.legendPosition];
+}
+
 // ─── Root model ───────────────────────────────────────────────────────────────
 
 export class VisualFormattingSettingsModel extends formattingSettings.Model {
-    public nodeSettings  = new NodeSettingsCard();
-    public linkSettings  = new LinkSettingsCard();
-    public labelSettings = new LabelSettingsCard();
-    public valueSettings = new ValueSettingsCard();
+    public nodeSettings       = new NodeSettingsCard();
+    public linkSettings       = new LinkSettingsCard();
+    public labelSettings      = new LabelSettingsCard();
+    public valueSettings      = new ValueSettingsCard();
+    public colorScaleSettings = new ColorScaleSettingsCard();
 
-    public cards = [this.nodeSettings, this.linkSettings, this.labelSettings, this.valueSettings];
+    public cards = [
+        this.nodeSettings,
+        this.linkSettings,
+        this.labelSettings,
+        this.valueSettings,
+        this.colorScaleSettings
+    ];
 }
