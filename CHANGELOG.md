@@ -12,6 +12,36 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.1.0-beta.1] — 2026-03-05
+
+### Changed
+- **Selection highlighting — downstream emphasis** — clicking a node or ribbon
+  now emphasises the selected element and every node and ribbon that lies
+  downstream (reachable by following links forward), while de-emphasising
+  everything else to 15 % opacity. Previously, only the clicked element and
+  its immediate neighbours were affected.
+
+  Behaviour by click target:
+  - **Node click** — the node and all downstream nodes are fully opaque;
+    all ribbons whose source is in that downstream set are fully opaque;
+    everything else fades to 15 %.
+  - **Ribbon click** — the ribbon, its source node, and all nodes/ribbons
+    downstream of the ribbon's target are fully opaque; everything else fades.
+  - **Background click** — clears the selection; all elements return to
+    full opacity (existing behaviour unchanged).
+
+  Cross-filtering of other report visuals is unchanged — the selection IDs
+  sent to Power BI are the same as before; only the visual emphasis logic
+  has changed.
+
+  Implementation: a `refreshDownstream()` BFS helper walks `sourceLinks`
+  forward from the selection start point and stores reachable node names
+  in a `Set<string>`. The set is seeded once after layout (to handle any
+  carried-over selection state) and refreshed in both click handlers before
+  the opacity attributes are re-applied.
+
+---
+
 ## [1.0.4-beta.1] — 2026-03-05
 
 ### Changed

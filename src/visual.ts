@@ -270,31 +270,69 @@ export class Visual implements IVisual {
         // Use report theme colours keyed by display label so the same name gets the same colour
         const color = (label: string): string => this.host.colorPalette.getColor(label).value;
 
-        // ── Opacity helpers (respect current selection state) ─────────────────
+        // ── Downstream selection helpers ──────────────────────────────────────
+        //
+        // When a node is clicked:  emphasise the node + every node/ribbon
+        //   reachable by following links forward (downstream).
+        // When a ribbon is clicked: emphasise the ribbon's source node, the
+        //   ribbon itself, and every node/ribbon downstream of the target node.
+        // Everything else is de-emphasised to 15 % opacity.
+        //
+        // downstreamSet  – names of all nodes in the highlighted downstream path
+        // linkSourceNode – for a ribbon click, the name of its source node
+        //   (kept separate because it is upstream of the BFS start)
+
+        let downstreamSet  = new Set<string>();
+        let linkSourceNode = "";
+
+        const refreshDownstream = (): void => {
+            downstreamSet  = new Set<string>();
+            linkSourceNode = "";
+            if (this.selectionType === "none") return;
+
+            let startName: string;
+            if (this.selectionType === "node") {
+                startName = this.selectedKey;
+            } else {
+                // Link: BFS from the target; remember the source separately
+                const parts   = this.selectedKey.split("\x00");
+                linkSourceNode = parts[0];
+                startName      = parts[1];
+            }
+
+            // BFS forward through sourceLinks to collect all downstream nodes
+            const queue: LayoutNode[] = [];
+            const start = graph.nodes.find(n => n.name === startName);
+            if (start) queue.push(start);
+            while (queue.length > 0) {
+                const n = queue.shift()!;
+                if (downstreamSet.has(n.name)) continue;
+                downstreamSet.add(n.name);
+                for (const lnk of (n.sourceLinks ?? [])) {
+                    queue.push(lnk.target as LayoutNode);
+                }
+            }
+        };
+
+        // Seed with any selection state carried over from the previous render
+        refreshDownstream();
+
         const nodeOpacity = (d: LayoutNode): number => {
             if (this.selectionType === "none") return 1;
-            if (this.selectionType === "node") {
-                if (d.name === this.selectedKey) return 1;
-                const adjacent =
-                    (d.sourceLinks ?? []).some((l: LayoutLink) => (l.target as LayoutNode).name === this.selectedKey) ||
-                    (d.targetLinks ?? []).some((l: LayoutLink) => (l.source as LayoutNode).name === this.selectedKey);
-                return adjacent ? 0.6 : 0.15;
-            }
-            // link selection: highlight the two endpoint nodes
-            const [sk, tk] = this.selectedKey.split("\x00");
-            return d.name === sk || d.name === tk ? 1 : 0.15;
+            // For a ribbon click the source node is upstream but still highlighted
+            if (d.name === linkSourceNode) return 1;
+            return downstreamSet.has(d.name) ? 1 : 0.15;
         };
 
         const linkOpacityFn = (d: LayoutLink): number => {
             if (this.selectionType === "none") return linkOpacity;
-            if (this.selectionType === "node") {
-                const src = (d.source as LayoutNode).name;
-                const tgt = (d.target as LayoutNode).name;
-                return src === this.selectedKey || tgt === this.selectedKey
-                    ? linkOpacity : linkOpacity * 0.15;
-            }
-            const lk = `${(d.source as LayoutNode).name}\x00${(d.target as LayoutNode).name}`;
-            return lk === this.selectedKey ? linkOpacity : linkOpacity * 0.15;
+            const src = (d.source as LayoutNode).name;
+            const tgt = (d.target as LayoutNode).name;
+            const lk  = `${src}\x00${tgt}`;
+            // The clicked ribbon is always fully visible
+            if (lk === this.selectedKey) return linkOpacity;
+            // Any ribbon whose source is in the downstream set continues the flow
+            return downstreamSet.has(src) ? linkOpacity : linkOpacity * 0.15;
         };
 
         // Minimum ribbon height: tall enough to contain the largest active text.
@@ -333,6 +371,7 @@ export class Visual implements IVisual {
             this.selectionType = "link";
             this.selectedKey   = lk;
             this.selectionManager.select(linkSelIds.get(lk) ?? [], event.ctrlKey || event.metaKey);
+            refreshDownstream();
             nodeGroups.select<SVGRectElement>("rect").attr("opacity", nodeOpacity);
             linkPaths.attr("opacity", linkOpacityFn);
             event.stopPropagation();
@@ -365,6 +404,7 @@ export class Visual implements IVisual {
             this.selectionType = "node";
             this.selectedKey   = d.name;
             this.selectionManager.select(nodeSelIds.get(d.name) ?? [], event.ctrlKey || event.metaKey);
+            refreshDownstream();
             nodeGroups.select<SVGRectElement>("rect").attr("opacity", nodeOpacity);
             linkPaths.attr("opacity", linkOpacityFn);
             event.stopPropagation();
