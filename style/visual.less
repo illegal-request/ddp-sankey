@@ -1,0 +1,32 @@
+.sankeyVisual {
+    overflow: visible;
+
+    .links path {
+        cursor: pointer;
+        transition: opacity 0.2s ease;
+
+        &:hover {
+            opacity: 0.75 !important;
+        }
+    }
+
+    .nodes {
+        .node rect {
+            cursor: default;
+            shape-rendering: crispEdges;
+
+            &:hover {
+                stroke-width: 1.5px;
+            }
+        }
+
+        text {
+            pointer-events: none;
+            user-select: none;
+        }
+    }
+
+    .errorText {
+        pointer-events: none;
+    }
+}

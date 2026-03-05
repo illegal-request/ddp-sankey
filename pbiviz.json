@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/core/pbiviz.json",
+  "visual": {
+    "name": "sankeyVisual",
+    "displayName": "DDP SanKey",
+    "guid": "SankeyVisual1A2B3C4D5E6F7A8B9C0D1E2F",
+    "visualClassName": "Visual",
+    "version": "1.0.0.0",
+    "description": "Sankey flow diagram showing source → target flows weighted by value",
+    "supportUrl": "https://localhost",
+    "gitHubUrl": ""
+  },
+  "apiVersion": "5.9.0",
+  "author": {
+    "name": "James Gleason",
+    "email": "Gleason.James@outlook.com"
+  },
+  "assets": {
+    "icon": "assets/icon.png"
+  },
+  "externalJS": [],
+  "style": "style/visual.less",
+  "capabilities": "capabilities.json",
+  "stringResources": []
+}

@@ -1,0 +1,149 @@
+{
+  "dataRoles": [
+    {
+      "displayName": "Path Levels",
+      "name": "pathLevels",
+      "kind": "Grouping",
+      "description": "Drag 2 or more columns here to define the flow hierarchy left to right (e.g. Region → Department → Team)"
+    },
+    {
+      "displayName": "Value",
+      "name": "value",
+      "kind": "Measure",
+      "description": "Flow weight or volume"
+    }
+  ],
+  "dataViewMappings": [
+    {
+      "conditions": [
+        {
+          "pathLevels": { "min": 1 },
+          "value": { "max": 1 }
+        }
+      ],
+      "categorical": {
+        "categories": {
+          "select": [{ "for": { "in": "pathLevels" } }],
+          "dataReductionAlgorithm": { "window": { "count": 10000 } }
+        },
+        "values": {
+          "select": [{ "bind": { "to": "value" } }]
+        }
+      }
+    }
+  ],
+  "objects": {
+    "nodeSettings": {
+      "displayName": "Nodes",
+      "properties": {
+        "nodeWidth": {
+          "displayName": "Node Width (px)",
+          "type": { "numeric": true }
+        },
+        "nodePadding": {
+          "displayName": "Node Padding (px)",
+          "type": { "numeric": true }
+        }
+      }
+    },
+    "linkSettings": {
+      "displayName": "Links",
+      "properties": {
+        "linkOpacity": {
+          "displayName": "Link Opacity",
+          "type": { "numeric": true }
+        }
+      }
+    },
+    "labelSettings": {
+      "displayName": "Labels",
+      "properties": {
+        "show": {
+          "displayName": "Show Labels",
+          "type": { "bool": true }
+        },
+        "fontFamily": {
+          "displayName": "Font Family",
+          "type": { "text": true }
+        },
+        "fontSize": {
+          "displayName": "Font Size",
+          "type": { "numeric": true }
+        },
+        "bold": {
+          "displayName": "Bold",
+          "type": { "bool": true }
+        },
+        "italic": {
+          "displayName": "Italic",
+          "type": { "bool": true }
+        },
+        "underline": {
+          "displayName": "Underline",
+          "type": { "bool": true }
+        },
+        "fontColor": {
+          "displayName": "Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    },
+    "valueSettings": {
+      "displayName": "Values",
+      "properties": {
+        "show": {
+          "displayName": "Show Values",
+          "type": { "bool": true }
+        },
+        "target": {
+          "displayName": "Show On",
+          "type": {
+            "enumeration": [
+              { "displayName": "Nodes",   "value": "nodes"   },
+              { "displayName": "Ribbons", "value": "ribbons" }
+            ]
+          }
+        },
+        "position": {
+          "displayName": "Position",
+          "type": {
+            "enumeration": [
+              { "displayName": "Inside",  "value": "inside"  },
+              { "displayName": "Outside", "value": "outside" },
+              { "displayName": "Auto",    "value": "auto"    }
+            ]
+          }
+        },
+        "fontFamily": {
+          "displayName": "Font Family",
+          "type": { "text": true }
+        },
+        "fontSize": {
+          "displayName": "Font Size",
+          "type": { "numeric": true }
+        },
+        "bold": {
+          "displayName": "Bold",
+          "type": { "bool": true }
+        },
+        "italic": {
+          "displayName": "Italic",
+          "type": { "bool": true }
+        },
+        "underline": {
+          "displayName": "Underline",
+          "type": { "bool": true }
+        },
+        "fontColor": {
+          "displayName": "Font Color",
+          "type": { "fill": { "solid": { "color": true } } }
+        }
+      }
+    }
+  },
+  "privileges": [],
+  "supportsHighlight": false,
+  "sorting": {
+    "default": {}
+  }
+}

@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.tmp/
+
+# Build reports
+webpack.statistics.prod.html
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.suo
+.vs/
