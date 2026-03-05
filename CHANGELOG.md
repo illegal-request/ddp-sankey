@@ -12,6 +12,20 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.0.3-beta.1] — 2026-03-05
+
+### Changed
+- **Output filename** — the built `.pbiviz` file is now named
+  `DDP_Sankey_{version}.pbiviz` (e.g. `DDP_Sankey_1.0.3.0.pbiviz`) instead
+  of the internal GUID-prefixed name. `build.ps1` renames the file immediately
+  after the pbiviz packager finishes.
+- **Visual GUID** — changed from `SankeyVisual1A2B3C4D5E6F7A8B9C0D1E2F` to
+  `DDP_Sankey`. ⚠️ This is a one-time breaking change: Power BI uses the GUID
+  to identify a visual, so any report using a previous version will need the
+  visual removed and re-added from the new `.pbiviz`.
+
+---
+
 ## [1.0.2-beta.1] — 2026-03-05
 
 ### Changed

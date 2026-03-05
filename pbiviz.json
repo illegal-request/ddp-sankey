@@ -3,9 +3,9 @@
   "visual": {
     "name": "sankeyVisual",
     "displayName": "DDP SanKey",
-    "guid": "SankeyVisual1A2B3C4D5E6F7A8B9C0D1E2F",
+    "guid": "DDP_Sankey",
     "visualClassName": "Visual",
-    "version": "1.0.2.0",
+    "version": "1.0.3.0",
     "description": "Sankey flow diagram showing source → target flows weighted by value",
     "supportUrl": "https://github.com/illegal-request/ddp-sankey/issues",
     "gitHubUrl": "https://github.com/illegal-request/ddp-sankey"

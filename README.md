@@ -64,7 +64,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\SankeyVisual1A2B3C4D5E6F7A8B9C0D1E2F.1.0.0.0.pbiviz`
+Output: `dist\DDP_Sankey_1.0.2.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 
