@@ -12,6 +12,19 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.0.4-beta.1] — 2026-03-05
+
+### Changed
+- **Version visible in hover tooltip** — hovering over the visual icon in
+  Power BI's visualizations pane now shows the version number at the start of
+  the description (e.g. "v1.0.4.0 - Sankey flow diagram..."). The version is
+  injected into the description by `build.ps1` at package time and restored
+  immediately after, so `pbiviz.json` stays clean and git never sees the
+  change. The `try/finally` block ensures the restore happens even if the
+  build fails.
+
+---
+
 ## [1.0.3-beta.1] — 2026-03-05
 
 ### Changed
