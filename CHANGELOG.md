@@ -12,6 +12,26 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.3-beta.1] — 2026-03-05
+
+### Fixed
+- **Ribbon gap on asymmetric nodes** — when a node had more (or thicker) ribbons
+  on one side than the other, `reStackRibbons()` centred the smaller cluster in
+  the middle of the node, leaving large empty gaps above and below it (e.g. three
+  ribbons entering but only one leaving).  The centering logic has been replaced
+  with a *fill-scale* approach:
+  - Each side's effective ribbon widths are scaled by `nodeHeight / sideTotal` so
+    they always span the full node height with no gap.
+  - The scale factor is computed independently per side, so an asymmetric node
+    (tall because the busier side drove the height) is handled correctly on both
+    the source and target faces.
+  - Scaled drawing widths are stored in a `Map<string, number>` (keyed by
+    `"srcName\x00tgtName"`) and used directly as the SVG `stroke-width` of each
+    ribbon path, so the rendered ribbon thickness matches the layout geometry
+    precisely.
+
+---
+
 ## [1.2.2-beta.1] — 2026-03-05
 
 ### Fixed

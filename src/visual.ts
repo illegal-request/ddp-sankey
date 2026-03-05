@@ -63,16 +63,23 @@ function measureText(text: string, font: string): number {
  * those centres are no longer spaced correctly, causing ribbons to overlap at
  * the node and to overflow the node rectangle.  This function corrects both.
  *
- * Ribbons are centred within the (possibly expanded) node so that the visual
- * mass is balanced on both the source and target sides.
+ * Each side's ribbons are *scaled* to fill the full node height rather than
+ * centred within it.  This prevents the large gaps that appeared when one side
+ * had far fewer (or thinner) ribbons than the other — e.g. three ribbons
+ * entering a node but only one leaving it.  The scale factor per side is:
+ *   fill = nodeH / sideTotal   (≥ 1 when ribbons don't yet fill the node)
+ *
+ * The source side is authoritative for drawing width: scaled widths are stored
+ * in `linkDrawW` (keyed by "srcName\x00tgtName") for use by the stroke-width
+ * drawing attribute.  The target side only updates y1 positions.
  */
-function reStackRibbons(graph: LayoutGraph, minH: number): void {
+function reStackRibbons(graph: LayoutGraph, minH: number, linkDrawW: Map<string, number>): void {
     for (const nd of graph.nodes) {
         const node     = nd as LayoutNode;
         const srcLinks = (node.sourceLinks ?? []) as LayoutLink[];
         const tgtLinks = (node.targetLinks ?? []) as LayoutLink[];
 
-        // Effective width for each ribbon
+        // Effective width for each ribbon (minimum enforced, not yet scaled to fill)
         const srcEW  = srcLinks.map(l => Math.max(minH, l.width ?? 1));
         const tgtEW  = tgtLinks.map(l => Math.max(minH, l.width ?? 1));
         const srcTot = srcEW.reduce((a, b) => a + b, 0);
@@ -88,21 +95,30 @@ function reStackRibbons(graph: LayoutGraph, minH: number): void {
         const nodeH = (node.y1 ?? 0) - (node.y0 ?? 0);
         const y0    = node.y0 ?? 0;
 
-        // Re-centre source ribbons vertically within the node
+        // Scale source ribbons to fill the full node height — no centering gap.
+        // Source side is authoritative: scaled drawing widths go into linkDrawW.
         if (srcLinks.length > 0) {
-            let y = y0 + (nodeH - srcTot) / 2;
+            const srcFill = srcTot > 0 ? nodeH / srcTot : 1;
+            let y = y0;
             srcLinks.forEach((lnk, i) => {
-                lnk.y0 = y + srcEW[i] / 2;
-                y += srcEW[i];
+                const dw = srcEW[i] * srcFill;
+                lnk.y0 = y + dw / 2;
+                y += dw;
+                const src = (lnk.source as LayoutNode).name;
+                const tgt = (lnk.target as LayoutNode).name;
+                linkDrawW.set(`${src}\x00${tgt}`, dw);
             });
         }
 
-        // Re-centre target ribbons vertically within the node
+        // Scale target ribbons to fill the full node height — no centering gap.
+        // Target side only updates y1 positions; drawing width comes from source pass.
         if (tgtLinks.length > 0) {
-            let y = y0 + (nodeH - tgtTot) / 2;
+            const tgtFill = tgtTot > 0 ? nodeH / tgtTot : 1;
+            let y = y0;
             tgtLinks.forEach((lnk, i) => {
-                lnk.y1 = y + tgtEW[i] / 2;
-                y += tgtEW[i];
+                const dw = tgtEW[i] * tgtFill;
+                lnk.y1 = y + dw / 2;
+                y += dw;
             });
         }
     }
@@ -510,8 +526,12 @@ export class Visual implements IVisual {
         //   • expanding node.y1 when the inflated ribbons no longer fit
         //   • re-centring link.y0 / link.y1 within the (possibly taller) node
         // This runs whenever minRibbonHeight could actually inflate something.
+        // linkDrawW: per-link scaled drawing widths populated by reStackRibbons.
+        // Keyed by "srcName\x00tgtName"; source side is authoritative.
+        // Falls back to Math.max(minRibbonHeight, d.width) when minRibbonHeight ≤ 1.
+        const linkDrawW = new Map<string, number>();
         if (minRibbonHeight > 1) {
-            reStackRibbons(graph, minRibbonHeight);
+            reStackRibbons(graph, minRibbonHeight, linkDrawW);
             // After nodes are expanded, nodes in the same column may overlap.
             // Resolve by pushing lower nodes down (with their ribbon endpoints).
             resolveColumnOverlaps(graph, nodePadding);
@@ -606,7 +626,11 @@ export class Visual implements IVisual {
             .join("path")
             .attr("d", sankeyLinkHorizontal())
             .attr("stroke",       ribbonColor)
-            .attr("stroke-width", d => Math.max(minRibbonHeight, d.width ?? 1))
+            .attr("stroke-width", d => {
+                const src = (d.source as LayoutNode).name;
+                const tgt = (d.target as LayoutNode).name;
+                return linkDrawW.get(`${src}\x00${tgt}`) ?? Math.max(minRibbonHeight, d.width ?? 1);
+            })
             .attr("opacity",      d => linkOpacityFn(d))
             .style("cursor", "pointer");
 
