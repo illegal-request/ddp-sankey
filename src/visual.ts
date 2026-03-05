@@ -39,6 +39,75 @@ type LayoutNode  = SankeyNode<NodeDatum, LinkDatum>;
 type LayoutLink  = SankeyLink<NodeDatum, LinkDatum>;
 type LayoutGraph = SankeyGraph<NodeDatum, LinkDatum>;
 
+// ─── Helpers (module-level) ───────────────────────────────────────────────────
+
+/**
+ * Measure the rendered pixel width of a text string using the browser's
+ * canvas 2D context (no layout side-effects, no DOM insertion needed).
+ */
+function measureText(text: string, font: string): number {
+    const canvas = document.createElement("canvas");
+    const ctx    = canvas.getContext("2d");
+    if (!ctx) return 0;
+    ctx.font = font;
+    return ctx.measureText(text).width;
+}
+
+/**
+ * Post-layout pass: re-stack ribbons within each node using their *effective*
+ * widths — i.e. Math.max(minH, link.width) — and expand the node's y1 when
+ * the inflated ribbons no longer fit inside the natural node height.
+ *
+ * d3-sankey positions ribbon centres (link.y0 / link.y1) based on the natural
+ * (proportional) ribbon width.  When minRibbonHeight inflates thin ribbons,
+ * those centres are no longer spaced correctly, causing ribbons to overlap at
+ * the node and to overflow the node rectangle.  This function corrects both.
+ *
+ * Ribbons are centred within the (possibly expanded) node so that the visual
+ * mass is balanced on both the source and target sides.
+ */
+function reStackRibbons(graph: LayoutGraph, minH: number): void {
+    for (const nd of graph.nodes) {
+        const node     = nd as LayoutNode;
+        const srcLinks = (node.sourceLinks ?? []) as LayoutLink[];
+        const tgtLinks = (node.targetLinks ?? []) as LayoutLink[];
+
+        // Effective width for each ribbon
+        const srcEW  = srcLinks.map(l => Math.max(minH, l.width ?? 1));
+        const tgtEW  = tgtLinks.map(l => Math.max(minH, l.width ?? 1));
+        const srcTot = srcEW.reduce((a, b) => a + b, 0);
+        const tgtTot = tgtEW.reduce((a, b) => a + b, 0);
+
+        // Expand the node downward (keeping y0 fixed) if ribbons need more room
+        const natH = (node.y1 ?? 0) - (node.y0 ?? 0);
+        const reqH = Math.max(natH, srcTot, tgtTot, minH);
+        if (reqH > natH) {
+            node.y1 = (node.y0 ?? 0) + reqH;
+        }
+
+        const nodeH = (node.y1 ?? 0) - (node.y0 ?? 0);
+        const y0    = node.y0 ?? 0;
+
+        // Re-centre source ribbons vertically within the node
+        if (srcLinks.length > 0) {
+            let y = y0 + (nodeH - srcTot) / 2;
+            srcLinks.forEach((lnk, i) => {
+                lnk.y0 = y + srcEW[i] / 2;
+                y += srcEW[i];
+            });
+        }
+
+        // Re-centre target ribbons vertically within the node
+        if (tgtLinks.length > 0) {
+            let y = y0 + (nodeH - tgtTot) / 2;
+            tgtLinks.forEach((lnk, i) => {
+                lnk.y1 = y + tgtEW[i] / 2;
+                y += tgtEW[i];
+            });
+        }
+    }
+}
+
 // ─── Visual ───────────────────────────────────────────────────────────────────
 
 export class Visual implements IVisual {
@@ -323,6 +392,14 @@ export class Visual implements IVisual {
             links.push({ source: nodeIndex.get(srcKey)!, target: nodeIndex.get(tgtKey)!, value });
         });
 
+        // Minimum ribbon height: tall enough to contain the largest active text label.
+        // Declared here (before layout) because reStackRibbons uses it post-layout.
+        const minRibbonHeight = Math.max(
+            1,
+            showLabels ? fontSize  + 4 : 1,
+            showValues ? vFontSize + 4 : 1
+        );
+
         // ── Layout ────────────────────────────────────────────────────────────
         const labelPad = showLabels ? Math.max(80, fontSize * 7) : 10;
         const margin   = { top: 10, right: labelPad, bottom: 10, left: labelPad };
@@ -331,6 +408,8 @@ export class Visual implements IVisual {
 
         this.container.attr("transform", `translate(${margin.left},${margin.top})`);
 
+        // Pass 1: run d3-sankey with the user's nodeWidth to obtain node values.
+        // We need node.value for text measurement before we can set the final width.
         let graph: LayoutGraph;
         try {
             graph = sankey<NodeDatum, LinkDatum>()
@@ -343,6 +422,48 @@ export class Visual implements IVisual {
         } catch (e) {
             this.showError(width, height, "Could not compute layout. Check for circular references.");
             return;
+        }
+
+        // ── Effective node width (minimum to hold value label text) ───────────
+        // When value labels are positioned inside a node, the node must be at
+        // least wide enough to contain the formatted number string.  Measure
+        // every node's label with the canvas API and take the widest.
+        let effectiveNodeWidth = nodeWidth;
+        if (showValues && valueTarget === "nodes" && valuePos !== "outside") {
+            const font = `${vBold ? "bold " : ""}${vFontSize}px ${vFontFamily}`;
+            for (const nd of graph.nodes) {
+                const tw = measureText((nd.value ?? 0).toLocaleString(), font);
+                if (tw + 8 > effectiveNodeWidth) effectiveNodeWidth = tw + 8; // 4 px each side
+            }
+        }
+
+        // Pass 2: re-run layout with the wider node if text measurement required it.
+        if (effectiveNodeWidth > nodeWidth) {
+            try {
+                graph = sankey<NodeDatum, LinkDatum>()
+                    .nodeWidth(effectiveNodeWidth)
+                    .nodePadding(nodePadding)
+                    .extent([[0, 0], [innerW, innerH]])({
+                        nodes: nodes.map(d => ({ ...d })),
+                        links: links.map(d => ({ ...d }))
+                    });
+            } catch (e) {
+                this.showError(width, height, "Could not compute layout. Check for circular references.");
+                return;
+            }
+        }
+
+        // ── Re-stack ribbons to honour minRibbonHeight ────────────────────────
+        // d3-sankey spaces ribbon centres based on natural (proportional) widths.
+        // minRibbonHeight inflates thin ribbons beyond their proportional share,
+        // so the natural centres are too close together — ribbons overlap at the
+        // node and overflow the node rectangle.  reStackRibbons corrects this by:
+        //   • computing effective ribbon widths: max(minRibbonHeight, natural width)
+        //   • expanding node.y1 when the inflated ribbons no longer fit
+        //   • re-centring link.y0 / link.y1 within the (possibly taller) node
+        // This runs whenever minRibbonHeight could actually inflate something.
+        if (minRibbonHeight > 1) {
+            reStackRibbons(graph, minRibbonHeight);
         }
 
         // Use report theme colours keyed by display label so the same name gets the same colour
@@ -412,13 +533,6 @@ export class Visual implements IVisual {
             // Any ribbon whose source is in the downstream set continues the flow
             return downstreamSet.has(src) ? linkOpacity : linkOpacity * 0.15;
         };
-
-        // Minimum ribbon height: tall enough to contain the largest active text label.
-        const minRibbonHeight = Math.max(
-            1,
-            showLabels ? fontSize  + 4 : 1,
-            showValues ? vFontSize + 4 : 1
-        );
 
         // Ribbon stroke color: color scale (if active) else theme color by source label
         const ribbonColor = (d: LayoutLink): string => {

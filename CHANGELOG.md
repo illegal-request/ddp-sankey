@@ -12,6 +12,41 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.1-beta.1] — 2026-03-05
+
+### Fixed
+- **Node height — ribbon overflow and overlap** — when `minRibbonHeight` inflated
+  thin ribbons beyond their proportional d3-sankey width, the ribbon centres were
+  too close together, causing ribbons to overlap each other at the node and spill
+  outside the node rectangle. A new `reStackRibbons()` post-layout pass corrects
+  this for every node:
+  - Computes each ribbon's *effective* width: `max(minRibbonHeight, natural width)`.
+  - Expands the node downward (`y1`) until the effective ribbons fit without overlap.
+  - Re-centres the stacked ribbons (`link.y0` / `link.y1`) within the (possibly
+    taller) node, balancing them on both the source and target sides.
+  - Intermediate nodes (ribbons entering and leaving) are handled on both sides
+    independently, so the visual mass is balanced even when the number of incoming
+    and outgoing ribbons differs.
+
+- **Node width — text overflow in inside value labels** — when value labels are
+  positioned *inside* nodes (`Position: Inside` or *Auto* with a tall enough node),
+  the node rectangle was sometimes narrower than the formatted number text, causing
+  clipping. The layout now uses a two-pass strategy:
+  - Pass 1 runs d3-sankey with the user's **Node Width** setting to obtain each
+    node's flow value.
+  - Those values are formatted and measured using the browser's canvas 2D API
+    (same font family, size, and weight as the value label setting).
+  - If any label is wider than the current node width, `effectiveNodeWidth` is set
+    to the widest label plus 4 px padding on each side.
+  - Pass 2 re-runs d3-sankey with `effectiveNodeWidth` so all nodes are wide enough
+    to contain their labels without clipping. Nodes that do not need expansion are
+    unaffected; the two-pass overhead is negligible.
+  - This only applies when **Show Values** is on, **Show On** is *Nodes*, and
+    **Position** is *Inside* or *Auto*. The `Outside` position places labels beyond
+    the node rectangle, so no width adjustment is needed.
+
+---
+
 ## [1.2.0-beta.1] — 2026-03-05
 
 ### Added
