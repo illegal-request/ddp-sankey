@@ -54,6 +54,10 @@
         "linkOpacity": {
           "displayName": "Link Opacity",
           "type": { "numeric": true }
+        },
+        "colorBySource": {
+          "displayName": "Color by Source",
+          "type": { "bool": true }
         }
       }
     },
