@@ -15,11 +15,13 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 ## [1.2.17-beta.1] — 2026-03-06
 
 ### Added
-- **Color by Source** (Links card) — when enabled, every ribbon is colored by
-  the first-column node it originates from.  Fractional source contributions are
-  propagated forward through the graph; each ribbon takes the theme color of
-  whichever depth-0 node contributes the most to it.  This makes multi-hop flows
-  visually continuous from the leftmost column to the rightmost column.
+- **Color by Source** (Links card) — when enabled, each ribbon is physically
+  split into sub-ribbon segments, one per first-column node that contributes
+  flow to it.  Each sub-ribbon is sized proportionally to its source's
+  fractional contribution and colored by that source's theme color.  Sub-ribbons
+  maintain a consistent top-to-bottom stacking order at every column, so a
+  flow originating from a first-column node can be visually traced as a
+  continuous colored band from left to right across all columns.
 
 ---
 

@@ -38,6 +38,19 @@ type LayoutNode  = SankeyNode<NodeDatum, LinkDatum>;
 type LayoutLink  = SankeyLink<NodeDatum, LinkDatum>;
 type LayoutGraph = SankeyGraph<NodeDatum, LinkDatum>;
 
+// Represents one rendered ribbon segment.  In normal mode: one per link.
+// In "Color by Source" mode: one per (link × depth-0 source), sized by fraction.
+interface SubRibbon {
+    link:     LayoutLink;
+    srcLabel: string;   // depth-0 source display label for color; "" = use link source label
+    srcX1:    number;
+    srcYtop:  number;
+    srcYbot:  number;
+    tgtX0:    number;
+    tgtYtop:  number;
+    tgtYbot:  number;
+}
+
 // ─── Helpers (module-level) ───────────────────────────────────────────────────
 
 /**
@@ -58,6 +71,18 @@ function measureText(text: string, font: string): number {
 /** Padding inside pill-shaped label/value backgrounds (px). */
 const PILL_PAD_V = 3;   // top and bottom
 const PILL_PAD_H = 8;   // left and right
+
+/** Cubic-bezier ribbon path for one SubRibbon (top + bottom edges). */
+function subRibbonPath(d: SubRibbon): string {
+    const cx = (d.srcX1 + d.tgtX0) / 2;
+    return [
+        `M${d.srcX1},${d.srcYtop}`,
+        `C${cx},${d.srcYtop} ${cx},${d.tgtYtop} ${d.tgtX0},${d.tgtYtop}`,
+        `L${d.tgtX0},${d.tgtYbot}`,
+        `C${cx},${d.tgtYbot} ${cx},${d.srcYbot} ${d.srcX1},${d.srcYbot}`,
+        `Z`
+    ].join(" ");
+}
 
 /**
  * Post-layout pass: re-stack ribbons within each node using their *effective*
@@ -707,91 +732,119 @@ export class Visual implements IVisual {
             return downstreamSet.has(d.name) ? 1 : 0.15;
         };
 
-        const linkOpacityFn = (d: LayoutLink): number => {
-            if (this.selectionType === "none") return linkOpacity;
-            const src = (d.source as LayoutNode).name;
-            const tgt = (d.target as LayoutNode).name;
-            const lk  = `${src}\x00${tgt}`;
-            // The clicked ribbon is always fully visible
-            if (lk === this.selectedKey) return linkOpacity;
-            // Any ribbon whose source is in the downstream set continues the flow
-            return downstreamSet.has(src) ? linkOpacity : linkOpacity * 0.15;
-        };
+        // ── Source contribution propagation ────────────────────────────────────
+        // nodeContrib: node.name → Map<depth0NodeName, fraction>
+        // Propagated in topological order so each downstream node inherits the
+        // weighted mix of depth-0 sources that flow into it.
+        const nodeContrib = new Map<string, Map<string, number>>();
+        const depth0Lbl   = new Map<string, string>();   // depth-0 node.name → label
 
-        // ── Source-trace color map ─────────────────────────────────────────────
-        // When "Color by Source" is on, propagate fractional contributions from
-        // each depth-0 node forward through the graph (topological order by depth)
-        // then color each ribbon by the depth-0 node that contributes the most to
-        // that ribbon's source node.  All ribbons tracing back to the same origin
-        // get the same theme color, making flows visually continuous left-to-right.
-        let dominantSourceLabel: Map<string, string> | null = null;
-        if (colorBySource) {
-            // contrib: node.name → Map<depth0NodeName, fraction>  (fractions sum to ~1)
-            const contrib   = new Map<string, Map<string, number>>();
-            const depth0Lbl = new Map<string, string>();   // depth-0 name → display label
-
-            const sortedNodes = [...graph.nodes as LayoutNode[]]
-                .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0));
-
-            for (const nd of sortedNodes) {
-                if ((nd.depth ?? 0) === 0) {
-                    contrib.set(nd.name, new Map([[nd.name, 1.0]]));
-                    depth0Lbl.set(nd.name, nd.label);
-                } else {
-                    const m    = new Map<string, number>();
-                    const totV = nd.value ?? 0;
-                    if (totV > 0) {
-                        for (const lnk of (nd.targetLinks ?? []) as LayoutLink[]) {
-                            const src  = lnk.source as LayoutNode;
-                            const frac = (lnk.value ?? 0) / totV;
-                            (contrib.get(src.name) ?? new Map()).forEach(
-                                (f, s) => m.set(s, (m.get(s) ?? 0) + f * frac)
-                            );
-                        }
+        for (const nd of ([...graph.nodes as LayoutNode[]]
+                          .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0)))) {
+            if ((nd.depth ?? 0) === 0) {
+                nodeContrib.set(nd.name, new Map([[nd.name, 1.0]]));
+                depth0Lbl.set(nd.name, nd.label);
+            } else {
+                const m    = new Map<string, number>();
+                const totV = nd.value ?? 0;
+                if (totV > 0) {
+                    for (const lnk of (nd.targetLinks ?? []) as LayoutLink[]) {
+                        const src  = lnk.source as LayoutNode;
+                        const frac = (lnk.value ?? 0) / totV;
+                        (nodeContrib.get(src.name) ?? new Map()).forEach(
+                            (f, s) => m.set(s, (m.get(s) ?? 0) + f * frac)
+                        );
                     }
-                    contrib.set(nd.name, m);
                 }
-            }
-
-            dominantSourceLabel = new Map<string, string>();
-            for (const nd of graph.nodes as LayoutNode[]) {
-                const m = contrib.get(nd.name) ?? new Map();
-                let bestKey = nd.name; let bestF = -1;
-                m.forEach((f, s) => { if (f > bestF) { bestF = f; bestKey = s; } });
-                dominantSourceLabel.set(nd.name, depth0Lbl.get(bestKey) ?? nd.label);
+                nodeContrib.set(nd.name, m);
             }
         }
 
-        // Ribbon color: theme color keyed by source node label (or dominant depth-0
-        // source label when "Color by Source" is enabled).
-        const ribbonColor = (d: LayoutLink): string => {
-            if (dominantSourceLabel) {
-                const lbl = dominantSourceLabel.get((d.source as LayoutNode).name);
-                if (lbl) return color(lbl);
+        // Canonical stacking order: depth-0 nodes sorted top-to-bottom by y0.
+        const depth0Order = new Map<string, number>(
+            ([...graph.nodes as LayoutNode[]]
+                .filter(n => (n.depth ?? 0) === 0)
+                .sort((a, b) => (a.y0 ?? 0) - (b.y0 ?? 0))
+                .map((n, i) => [n.name, i] as [string, number]))
+        );
+
+        // ── Sub-ribbon data ────────────────────────────────────────────────────
+        // Normal mode: one SubRibbon per link (full ribbon width).
+        // Color by Source mode: one SubRibbon per (link × depth-0 source),
+        //   each occupying a proportional vertical slice, stacked in the same
+        //   depth-0 order at every column so flows trace continuously left-to-right.
+        const subRibbons: SubRibbon[] = [];
+        for (const lnk of graph.links as LayoutLink[]) {
+            const srcNd = lnk.source as LayoutNode;
+            const tgtNd = lnk.target as LayoutNode;
+            const key   = `${srcNd.name}\x00${tgtNd.name}`;
+            const srcW  = linkDrawW.get(key)     ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+            const tgtW  = linkDrawW_tgt.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+            const srcX1 = srcNd.x1 ?? 0;
+            const tgtX0 = tgtNd.x0 ?? 0;
+            const sYmid = lnk.y0 ?? 0;
+            const tYmid = lnk.y1 ?? 0;
+
+            if (!colorBySource) {
+                subRibbons.push({
+                    link: lnk, srcLabel: "",
+                    srcX1, srcYtop: sYmid - srcW / 2, srcYbot: sYmid + srcW / 2,
+                    tgtX0, tgtYtop: tYmid - tgtW / 2, tgtYbot: tYmid + tgtW / 2,
+                });
+            } else {
+                const contribs = nodeContrib.get(srcNd.name) ?? new Map();
+                const sorted   = [...contribs.entries()]
+                    .sort((a, b) => (depth0Order.get(a[0]) ?? 0) - (depth0Order.get(b[0]) ?? 0));
+                let sY = sYmid - srcW / 2;
+                let tY = tYmid - tgtW / 2;
+                for (const [d0name, frac] of sorted) {
+                    const sw = srcW * frac;
+                    const tw = tgtW * frac;
+                    subRibbons.push({
+                        link: lnk, srcLabel: depth0Lbl.get(d0name) ?? srcNd.label,
+                        srcX1, srcYtop: sY, srcYbot: sY + sw,
+                        tgtX0, tgtYtop: tY, tgtYbot: tY + tw,
+                    });
+                    sY += sw;
+                    tY += tw;
+                }
             }
-            return color((d.source as LayoutNode).label);
+        }
+
+        const linkOpacityFn = (d: SubRibbon): number => {
+            if (this.selectionType === "none") return linkOpacity;
+            const src = (d.link.source as LayoutNode).name;
+            const tgt = (d.link.target as LayoutNode).name;
+            const lk  = `${src}\x00${tgt}`;
+            if (lk === this.selectedKey) return linkOpacity;
+            return downstreamSet.has(src) ? linkOpacity : linkOpacity * 0.15;
         };
 
+        // Ribbon color: depth-0 source label (colorBySource) or immediate source label.
+        const ribbonColor = (d: SubRibbon): string =>
+            color(d.srcLabel || (d.link.source as LayoutNode).label);
+
         // ── Links ─────────────────────────────────────────────────────────────
-        // Rendered as filled closed paths (not stroked centrelines) so the ribbon
-        // naturally tapers from its source-side width to its target-side width.
+        // Each SubRibbon is one filled closed path.  In normal mode this is one
+        // path per link; in "Color by Source" mode each link emits N paths so
+        // flows are visually split and traceable from the leftmost column onward.
         const linkPaths = this.container
             .append("g")
             .classed("links", true)
-            .selectAll<SVGPathElement, LayoutLink>("path")
-            .data(graph.links)
+            .selectAll<SVGPathElement, SubRibbon>("path")
+            .data(subRibbons)
             .join("path")
-            .attr("d",       d => taperingRibbonPath(d, linkDrawW, linkDrawW_tgt, minRibbonHeight, fitK))
-            .attr("fill",    ribbonColor)
+            .attr("d",       d => subRibbonPath(d))
+            .attr("fill",    d => ribbonColor(d))
             .attr("opacity", d => linkOpacityFn(d))
             .style("cursor", "pointer");
 
         linkPaths
             .append("title")
-            .text(d => `${(d.source as LayoutNode).label} \u2192 ${(d.target as LayoutNode).label}\n${d.value.toLocaleString()}`);
+            .text(d => `${(d.link.source as LayoutNode).label} \u2192 ${(d.link.target as LayoutNode).label}\n${d.link.value.toLocaleString()}`);
 
-        linkPaths.on("click", (event: MouseEvent, d: LayoutLink) => {
-            const lk = `${(d.source as LayoutNode).name}\x00${(d.target as LayoutNode).name}`;
+        linkPaths.on("click", (event: MouseEvent, d: SubRibbon) => {
+            const lk = `${(d.link.source as LayoutNode).name}\x00${(d.link.target as LayoutNode).name}`;
             if (this.selectionType === "link" && this.selectedKey === lk) {
                 // Second click on the same ribbon — deselect
                 this.selectionType = "none";
