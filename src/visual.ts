@@ -770,43 +770,94 @@ export class Visual implements IVisual {
 
         // ── Sub-ribbon data ────────────────────────────────────────────────────
         // Normal mode: one SubRibbon per link (full ribbon width).
-        // Color by Source mode: one SubRibbon per (link × depth-0 source),
-        //   each occupying a proportional vertical slice, stacked in the same
-        //   depth-0 order at every column so flows trace continuously left-to-right.
+        // Color by Source mode: node-level source banding.
+        //   Each node's [y0, y1] is divided into per-source bands (sized by
+        //   fractional contribution, ordered by depth0Order).  Both the right side
+        //   (outgoing links) and left side (incoming links) of every node use the
+        //   same band layout, so like-source sub-ribbons are always contiguous and
+        //   flows trace smoothly through every intermediate node without jumbling.
         const subRibbons: SubRibbon[] = [];
-        for (const lnk of graph.links as LayoutLink[]) {
-            const srcNd = lnk.source as LayoutNode;
-            const tgtNd = lnk.target as LayoutNode;
-            const key   = `${srcNd.name}\x00${tgtNd.name}`;
-            const srcW  = linkDrawW.get(key)     ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-            const tgtW  = linkDrawW_tgt.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-            const srcX1 = srcNd.x1 ?? 0;
-            const tgtX0 = tgtNd.x0 ?? 0;
-            const sYmid = lnk.y0 ?? 0;
-            const tYmid = lnk.y1 ?? 0;
-
-            if (!colorBySource) {
+        if (!colorBySource) {
+            for (const lnk of graph.links as LayoutLink[]) {
+                const srcNd = lnk.source as LayoutNode;
+                const tgtNd = lnk.target as LayoutNode;
+                const key   = `${srcNd.name}\x00${tgtNd.name}`;
+                const srcW  = linkDrawW.get(key)     ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+                const tgtW  = linkDrawW_tgt.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
                 subRibbons.push({
                     link: lnk, srcLabel: "",
-                    srcX1, srcYtop: sYmid - srcW / 2, srcYbot: sYmid + srcW / 2,
-                    tgtX0, tgtYtop: tYmid - tgtW / 2, tgtYbot: tYmid + tgtW / 2,
+                    srcX1: srcNd.x1 ?? 0, srcYtop: (lnk.y0 ?? 0) - srcW / 2, srcYbot: (lnk.y0 ?? 0) + srcW / 2,
+                    tgtX0: tgtNd.x0 ?? 0, tgtYtop: (lnk.y1 ?? 0) - tgtW / 2, tgtYbot: (lnk.y1 ?? 0) + tgtW / 2,
                 });
-            } else {
-                const contribs = nodeContrib.get(srcNd.name) ?? new Map();
-                const sorted   = [...contribs.entries()]
+            }
+        } else {
+            // srcPos / tgtPos: keyed by "srcName\x00tgtName\x00depth0Name"
+            const srcPos = new Map<string, {top: number; bot: number}>();
+            const tgtPos = new Map<string, {top: number; bot: number}>();
+
+            for (const nd of ([...graph.nodes as LayoutNode[]]
+                              .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0)))) {
+                const nodeH    = (nd.y1 ?? 0) - (nd.y0 ?? 0);
+                const srcLinks = (nd.sourceLinks ?? []) as LayoutLink[];
+                const tgtLinks = (nd.targetLinks ?? []) as LayoutLink[];
+                const ndSrcs   = [...(nodeContrib.get(nd.name) ?? new Map<string, number>()).entries()]
                     .sort((a, b) => (depth0Order.get(a[0]) ?? 0) - (depth0Order.get(b[0]) ?? 0));
-                let sY = sYmid - srcW / 2;
-                let tY = tYmid - tgtW / 2;
-                for (const [d0name, frac] of sorted) {
-                    const sw = srcW * frac;
-                    const tw = tgtW * frac;
+
+                // ── Right side: source-side positions of outgoing links ────────
+                // Cursor per source starts at the top of each source's band.
+                const outCursor = new Map<string, number>();
+                { let y = nd.y0 ?? 0;
+                  for (const [s, frac] of ndSrcs) { outCursor.set(s, y); y += nodeH * frac; } }
+
+                for (const lnk of srcLinks) {
+                    const key  = `${nd.name}\x00${(lnk.target as LayoutNode).name}`;
+                    const fullW = linkDrawW.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+                    for (const [s, frac] of ndSrcs) {
+                        const subW = fullW * frac;
+                        const cur  = outCursor.get(s) ?? 0;
+                        srcPos.set(`${key}\x00${s}`, {top: cur, bot: cur + subW});
+                        outCursor.set(s, cur + subW);
+                    }
+                }
+
+                // ── Left side: target-side positions of incoming links ─────────
+                // Each incoming link carries the source profile of its own source
+                // node; place those sub-ribbons within this node's source bands.
+                const inCursor = new Map<string, number>();
+                { let y = nd.y0 ?? 0;
+                  for (const [s, frac] of ndSrcs) { inCursor.set(s, y); y += nodeH * frac; } }
+
+                for (const lnk of tgtLinks) {
+                    const srcNd     = lnk.source as LayoutNode;
+                    const key       = `${srcNd.name}\x00${nd.name}`;
+                    const fullW     = linkDrawW_tgt.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+                    const lnkContrib = nodeContrib.get(srcNd.name) ?? new Map<string, number>();
+                    for (const [s, _frac] of ndSrcs) {
+                        const subW = fullW * (lnkContrib.get(s) ?? 0);
+                        const cur  = inCursor.get(s) ?? 0;
+                        tgtPos.set(`${key}\x00${s}`, {top: cur, bot: cur + subW});
+                        inCursor.set(s, cur + subW);
+                    }
+                }
+            }
+
+            // Build SubRibbon array from the position maps
+            for (const lnk of graph.links as LayoutLink[]) {
+                const srcNd = lnk.source as LayoutNode;
+                const tgtNd = lnk.target as LayoutNode;
+                const key   = `${srcNd.name}\x00${tgtNd.name}`;
+                const srcs  = [...(nodeContrib.get(srcNd.name) ?? new Map<string, number>()).entries()]
+                    .sort((a, b) => (depth0Order.get(a[0]) ?? 0) - (depth0Order.get(b[0]) ?? 0));
+                for (const [s, frac] of srcs) {
+                    if (frac < 0.0001) continue;
+                    const sp = srcPos.get(`${key}\x00${s}`);
+                    const tp = tgtPos.get(`${key}\x00${s}`);
+                    if (!sp || !tp) continue;
                     subRibbons.push({
-                        link: lnk, srcLabel: depth0Lbl.get(d0name) ?? srcNd.label,
-                        srcX1, srcYtop: sY, srcYbot: sY + sw,
-                        tgtX0, tgtYtop: tY, tgtYbot: tY + tw,
+                        link: lnk, srcLabel: depth0Lbl.get(s) ?? srcNd.label,
+                        srcX1: srcNd.x1 ?? 0, srcYtop: sp.top, srcYbot: sp.bot,
+                        tgtX0: tgtNd.x0 ?? 0, tgtYtop: tp.top, tgtYbot: tp.bot,
                     });
-                    sY += sw;
-                    tY += tw;
                 }
             }
         }
