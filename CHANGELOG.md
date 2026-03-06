@@ -12,6 +12,21 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.18-beta.1] — 2026-03-06
+
+### Fixed
+- **Color by Source — sub-ribbon band heights** — band slots are now derived
+  from actual `linkDrawW` / `linkDrawW_tgt` widths rather than value-based
+  `nodeContrib` fractions, eliminating overflow when `minRibbonHeight`
+  inflates thin links beyond their proportional share.
+- **Color by Source — capabilities.json** — `colorBySource` property
+  registered so Power BI persists the toggle value across renders.
+- **Color by Source — node-level source banding** — replaces per-link
+  splitting with a proper node-band layout so like-source sub-ribbons are
+  contiguous at every node boundary and flows trace without jumbling.
+
+---
+
 ## [1.2.17-beta.1] — 2026-03-06
 
 ### Added
