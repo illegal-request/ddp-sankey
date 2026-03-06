@@ -202,7 +202,8 @@ function taperingRibbonPath(
     d:             LayoutLink,
     linkDrawW:     Map<string, number>,
     linkDrawW_tgt: Map<string, number>,
-    minH:          number
+    minH:          number,
+    fitK:          number
 ): string {
     const src  = d.source as LayoutNode;
     const tgt  = d.target as LayoutNode;
@@ -212,8 +213,9 @@ function taperingRibbonPath(
     const cy0  = d.y0 ?? 0;
     const cy1  = d.y1 ?? 0;
     const key  = `${src.name}\x00${tgt.name}`;
-    const srcW = linkDrawW.get(key)     ?? Math.max(minH, d.width ?? 1);
-    const tgtW = linkDrawW_tgt.get(key) ?? Math.max(minH, d.width ?? 1);
+    // linkDrawW values are pre-scaled by fitK; the fallback d.width also needs scaling.
+    const srcW = linkDrawW.get(key)     ?? Math.max(minH, d.width ?? 1) * fitK;
+    const tgtW = linkDrawW_tgt.get(key) ?? Math.max(minH, d.width ?? 1) * fitK;
     const hs   = srcW / 2;   // half-height at source
     const ht   = tgtW / 2;   // half-height at target
     return (
@@ -615,28 +617,36 @@ export class Visual implements IVisual {
             resolveColumnOverlaps(graph, nodePadding);
         }
 
-        // ── Fit-to-viewport transform ──────────────────────────────────────────
+        // ── Fit-to-viewport (vertical only) ───────────────────────────────────
         // reStackRibbons / resolveColumnOverlaps can push nodes below innerH.
-        // Compute the actual layout bottom, then apply a zoom transform that
-        // scales the whole diagram down just enough to keep everything visible.
-        //
-        // Horizontal content is always exactly viewport-width by construction
-        // (margin.left + innerW + margin.right == width), so only vertical
-        // overflow ever needs correcting.  When the content fits (fitK == 1)
-        // the resulting transform is the identity — no zoom is applied.
-        {
-            const actualMaxY = graph.nodes.reduce((m, n) => Math.max(m, n.y1 ?? 0), 0);
-            const totalH     = margin.top + actualMaxY + margin.bottom;
-            const fitK       = Math.min(1, height / totalH);
-            // Centre the (possibly narrower) scaled content horizontally.
-            const fitTx      = width * (1 - fitK) / 2;
-            this.fitTransform = zoomIdentity.translate(fitTx, 0).scale(fitK);
-            // Only snap to fit-to-viewport on data or resize updates.
-            // Format-pane-only changes (colour, font, etc.) preserve the user's
-            // current zoom/pan state so tweaking settings isn't disruptive.
-            if (options.type & (VisualUpdateType.Data | VisualUpdateType.Resize)) {
-                this.svg.call(this.zoomBehavior.transform, this.fitTransform);
+        // Rather than applying a uniform SVG zoom (which also compresses the
+        // horizontal axis and introduces left/right margins), we scale only the
+        // y-coordinates directly in the graph data before rendering.  Horizontal
+        // positions are always exact by construction and are never touched.
+        const actualMaxY = graph.nodes.reduce((m, n) => Math.max(m, n.y1 ?? 0), 0);
+        const fitK       = actualMaxY > 0 ? Math.min(1, innerH / actualMaxY) : 1;
+        if (fitK < 1) {
+            for (const nd of graph.nodes) {
+                const node = nd as LayoutNode;
+                node.y0 = (node.y0 ?? 0) * fitK;
+                node.y1 = (node.y1 ?? 0) * fitK;
+                for (const lnk of (node.sourceLinks ?? []) as LayoutLink[]) {
+                    lnk.y0 = (lnk.y0 ?? 0) * fitK;
+                }
+                for (const lnk of (node.targetLinks ?? []) as LayoutLink[]) {
+                    lnk.y1 = (lnk.y1 ?? 0) * fitK;
+                }
             }
+            // Scale ribbon drawing-width maps so ribbon heights match node heights.
+            linkDrawW.forEach((w, k)     => linkDrawW.set(k, w * fitK));
+            linkDrawW_tgt.forEach((w, k) => linkDrawW_tgt.set(k, w * fitK));
+        }
+        // y-coordinates are pre-scaled — no SVG transform needed for fit-to-viewport.
+        // fitTransform is the identity; double-click reset returns to the natural fit.
+        // Only snap the zoom on data or resize (not format-pane-only) updates.
+        this.fitTransform = zoomIdentity;
+        if (options.type & (VisualUpdateType.Data | VisualUpdateType.Resize)) {
+            this.svg.call(this.zoomBehavior.transform, this.fitTransform);
         }
 
         // Use report theme colours keyed by display label so the same name gets the same colour
@@ -719,7 +729,7 @@ export class Visual implements IVisual {
             .selectAll<SVGPathElement, LayoutLink>("path")
             .data(graph.links)
             .join("path")
-            .attr("d",       d => taperingRibbonPath(d, linkDrawW, linkDrawW_tgt, minRibbonHeight))
+            .attr("d",       d => taperingRibbonPath(d, linkDrawW, linkDrawW_tgt, minRibbonHeight, fitK))
             .attr("fill",    ribbonColor)
             .attr("opacity", d => linkOpacityFn(d))
             .style("cursor", "pointer");

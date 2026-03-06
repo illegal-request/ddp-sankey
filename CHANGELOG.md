@@ -12,6 +12,16 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.16-beta.1] — 2026-03-06
+
+### Fixed
+- **No horizontal margins when labels/values are enabled** — fit-to-viewport
+  no longer applies a uniform SVG scale. Instead, y-coordinates are scaled
+  in-place after layout, so nodes and ribbons always span the full viewport
+  width regardless of label/value font size or visibility.
+
+---
+
 ## [1.2.15-beta.1] — 2026-03-06
 
 ### Fixed
