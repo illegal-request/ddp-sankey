@@ -175,21 +175,12 @@
         }
       }
     },
-    "columnTotals": {
-      "displayName": "Column Totals",
+    "grandTotal": {
+      "displayName": "Grand Total",
       "properties": {
         "show": {
-          "displayName": "Show Column Totals",
+          "displayName": "Show Grand Total",
           "type": { "bool": true }
-        },
-        "position": {
-          "displayName": "Position",
-          "type": {
-            "enumeration": [
-              { "displayName": "Above", "value": "above" },
-              { "displayName": "Below", "value": "below" }
-            ]
-          }
         },
         "fontFamily": {
           "displayName": "Font Family",

@@ -308,7 +308,7 @@ export class Visual implements IVisual {
 
         const {
             nodeSettings, linkSettings, labelSettings,
-            valueSettings, columnTotals: colTotSettings
+            valueSettings, grandTotal: gtSettings
         } = this.formattingSettings;
 
         const nodeWidth   = Math.max(4, nodeSettings.nodeWidth.value);
@@ -335,15 +335,13 @@ export class Visual implements IVisual {
         const vUnderline  = valueSettings.fontControl.underline?.value ?? false;
         const vFontColor  = valueSettings.fontColor.value?.value       ?? "#333333";
 
-        const showColTotals  = colTotSettings.show.value;
-        const colTotPos      = String(colTotSettings.position.value?.value  ?? "above");
-        const colTotAbove    = colTotPos === "above";
-        const ctFontFamily   = colTotSettings.fontControl.fontFamily.value;
-        const ctFontSize     = Math.max(8, colTotSettings.fontControl.fontSize.value);
-        const ctBold         = colTotSettings.fontControl.bold?.value      ?? true;
-        const ctItalic       = colTotSettings.fontControl.italic?.value    ?? false;
-        const ctUnderline    = colTotSettings.fontControl.underline?.value ?? false;
-        const ctFontColor    = colTotSettings.fontColor.value?.value       ?? "#333333";
+        const showGrandTotal = gtSettings.show.value;
+        const gtFontFamily   = gtSettings.fontControl.fontFamily.value;
+        const gtFontSize     = Math.max(8, gtSettings.fontControl.fontSize.value);
+        const gtBold         = gtSettings.fontControl.bold?.value      ?? true;
+        const gtItalic       = gtSettings.fontControl.italic?.value    ?? false;
+        const gtUnderline    = gtSettings.fontControl.underline?.value ?? false;
+        const gtFontColor    = gtSettings.fontColor.value?.value       ?? "#333333";
 
         const labelBg             = labelSettings.showBackground.value;
         const labelBgColor        = labelSettings.backgroundColor.value?.value  ?? "#ffffff";
@@ -503,16 +501,35 @@ export class Visual implements IVisual {
                 if (lvl === numLvls - 1) rightLabelMaxW = Math.max(rightLabelMaxW, w);
             }
         }
+        // ── Grand total pre-computation ───────────────────────────────────────
+        // The grand total = sum of all link values leaving the first column
+        // (depth-0 sources, identified by the "0\x01" key prefix).  This can be
+        // computed from the raw linkMap — before layout — so we can size the left
+        // margin to fit the formatted number string.
+        let grandTotalValue = 0;
+        const gtFont = `${gtBold ? "bold " : ""}${gtFontSize}px ${gtFontFamily}`;
+        let grandTotalTextW = 0;
+        if (showGrandTotal) {
+            linkMap.forEach((value, key) => {
+                const srcKey = key.slice(0, key.indexOf("\x00"));
+                if (srcKey.startsWith("0\x01")) grandTotalValue += value;
+            });
+            grandTotalTextW = measureText(grandTotalValue.toLocaleString(), gtFont);
+        }
+
         const lbExtra  = labelBgActive ? PILL_PAD_H : 0;
-        const leftPad  = (showLabels && labelOutside) ? leftLabelMaxW  + labelGap + lbExtra : 8;
+        // Grand total sits to the left of the first column, right-aligned at
+        // (firstCol.x0 - labelGap).  Its reserved left margin = text width + gap.
+        const gtPad    = showGrandTotal ? grandTotalTextW + labelGap * 2 : 0;
+        const leftPad  = Math.max(
+            (showLabels && labelOutside) ? leftLabelMaxW  + labelGap + lbExtra : 8,
+            showGrandTotal               ? gtPad                               : 8
+        );
         const rightPad = (showLabels && labelOutside) ? rightLabelMaxW + labelGap + lbExtra : 8;
-        // When column totals are enabled, reserve a strip of height ctH (font + 16 px
-        // padding — 8 px each side) at whichever edge the totals are positioned on.
-        const ctH      = showColTotals ? ctFontSize + 16 : 0;
         const margin   = {
-            top:    8 + (showColTotals &&  colTotAbove ? ctH : 0),
+            top:    8,
             right:  Math.max(8, rightPad),
-            bottom: 8 + (showColTotals && !colTotAbove ? ctH : 0),
+            bottom: 8,
             left:   Math.max(8, leftPad)
         };
         const innerW   = Math.max(10, width  - margin.left - margin.right);
@@ -921,55 +938,36 @@ export class Visual implements IVisual {
             }
         }
 
-        // ── Column totals ──────────────────────────────────────────────────────
-        // Sums all node values at each column depth and renders a single total
-        // label centred over each column in the reserved strip above or below.
+        // ── Grand total ────────────────────────────────────────────────────────
+        // Renders a single formatted total to the LEFT of the first column of
+        // nodes, right-aligned against the node face and vertically centred on
+        // the first column's vertical extent.
         //
-        // node.value (set by d3-sankey) = max(sum of in-flows, sum of out-flows).
-        // Summing across all nodes at the same depth gives the total throughput
-        // at that stage — the "total number of things" the user asked for.
-        //
-        // The container is translated by (margin.left, margin.top), so the Sankey
-        // nodes sit in the range y ∈ [0, innerH] in container coordinates.
-        // Negative y goes into the top margin; y > innerH goes into the bottom margin.
-        if (showColTotals) {
-            // Aggregate per depth — nodes in the same column share the same x0/x1
-            const colTotMap = new Map<number, { total: number; x0: number; x1: number }>();
-            for (const nd of graph.nodes) {
-                const dep   = nd.depth ?? 0;
-                const entry = colTotMap.get(dep);
-                if (entry) {
-                    entry.total += nd.value ?? 0;
-                } else {
-                    colTotMap.set(dep, { total: nd.value ?? 0, x0: nd.x0 ?? 0, x1: nd.x1 ?? 0 });
-                }
-            }
-
-            const colTotData = Array.from(colTotMap.values())
-                .sort((a, b) => a.x0 - b.x0);   // ensure left-to-right order
-
-            // Centre vertically in the reserved strip.  The strip is ctH px tall;
-            // centering the text at ±ctH/2 leaves 8 px of breathing room each side.
-            const ctY = colTotAbove ? -(ctH / 2) : innerH + ctH / 2;
+        // The value (grandTotalValue) was computed before layout from the raw
+        // linkMap (sum of all flows leaving depth-0 nodes) and is already set.
+        // The left margin was expanded accordingly, so the text fits cleanly.
+        if (showGrandTotal) {
+            const depth0Nodes = graph.nodes.filter(n => (n.depth ?? 0) === 0);
+            const firstX0     = depth0Nodes.reduce((m, n) => Math.min(m, n.x0 ?? 0), Infinity);
+            const firstColY0  = depth0Nodes.reduce((m, n) => Math.min(m, n.y0 ?? 0), Infinity);
+            const firstColY1  = depth0Nodes.reduce((m, n) => Math.max(m, n.y1 ?? 0), 0);
+            const gtY         = (firstColY0 + firstColY1) / 2;   // vertical centre of first column
 
             this.container
-                .append("g")
-                .classed("column-totals", true)
+                .append("text")
+                .classed("grand-total", true)
                 .attr("pointer-events", "none")
-                .selectAll<SVGTextElement, { total: number; x0: number; x1: number }>("text")
-                .data(colTotData)
-                .join("text")
-                .attr("x",                 d => (d.x0 + d.x1) / 2)
-                .attr("y",                 ctY)
-                .attr("text-anchor",       "middle")
+                .attr("x",                 firstX0 - labelGap)
+                .attr("y",                 gtY)
+                .attr("text-anchor",       "end")
                 .attr("dominant-baseline", "middle")
-                .attr("font-family",       ctFontFamily)
-                .attr("font-size",         `${ctFontSize}px`)
-                .attr("font-weight",       ctBold      ? "bold"      : "normal")
-                .attr("font-style",        ctItalic    ? "italic"    : "normal")
-                .attr("text-decoration",   ctUnderline ? "underline" : "none")
-                .attr("fill",              ctFontColor)
-                .text(d => d.total.toLocaleString());
+                .attr("font-family",       gtFontFamily)
+                .attr("font-size",         `${gtFontSize}px`)
+                .attr("font-weight",       gtBold      ? "bold"      : "normal")
+                .attr("font-style",        gtItalic    ? "italic"    : "normal")
+                .attr("text-decoration",   gtUnderline ? "underline" : "none")
+                .attr("fill",              gtFontColor)
+                .text(grandTotalValue.toLocaleString());
         }
 
     }

@@ -22,7 +22,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 | **Zoom & pan** | Scroll to zoom, drag to pan, double-click to reset |
 | **Field-well ordering** | Top-to-bottom order in the Path Levels field well maps left-to-right in the visual |
 | **Tapered ribbons** | Each ribbon end independently matches the allocated height on that node face; ribbons rendered as filled paths that taper smoothly between source and target widths |
-| **Column totals** | Optional strip above or below the diagram showing the total flow volume at each stage, so you can see the overall scale and then read node decomposition below |
+| **Grand Total** | Optional total displayed to the left of the first column, showing the top-line flow volume entering the diagram so viewers can immediately see the whole before reading the decomposition |
 
 ---
 
@@ -54,10 +54,9 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 - **Background Color** — default white
 - **Transparency** — 0 % (opaque) → 100 % (invisible), default 20 %
 
-### Column Totals
-- **Show Column Totals** — toggle the totals strip on/off
-- **Position** — `Above` (default) or `Below` the diagram
-- **Font** — family, size, bold (default on), italic, underline
+### Grand Total
+- **Show Grand Total** — toggle the grand total label on/off
+- **Font** — family, size (default 14), bold (default on), italic, underline
 - **Font Color**
 
 ---
@@ -79,7 +78,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\DDP_Sankey_1.2.11.0.pbiviz` (filename always matches the current version)
+Output: `dist\DDP_Sankey_1.2.12.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 

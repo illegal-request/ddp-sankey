@@ -12,31 +12,38 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.12-beta.1] — 2026-03-06
+
+### Changed
+- **Column Totals replaced by Grand Total** — the per-column totals strip
+  (v1.2.11) showed the same total at every stage of a balanced flow, which was
+  redundant.  It is replaced by a single **Grand Total** label positioned to the
+  *left* of the first column of nodes, showing the total flow volume entering
+  the diagram.
+
+  Viewers can immediately see the top-line number and then read the Sankey to
+  understand how it decomposes stage by stage.
+
+  Controls (in the new **Grand Total** format card):
+  - **Show Grand Total** — header toggle; off by default.
+  - **Font** — family, size (default 14), bold (default on), italic, underline.
+  - **Font Color** — default dark grey (#333333).
+
+  Implementation: the total is computed before layout by summing all link values
+  whose source is at depth 0 (`linkMap` keys starting with `"0\x01"`).  The
+  canvas-measured text width is used to widen the left margin so the label never
+  clips, and the label is right-aligned at `firstColumn.x0 − 6 px`, vertically
+  centred on the vertical extent of all first-column nodes.  When the Labels
+  *Outside* mode is also active, the grand total shares the left margin with the
+  leftmost node labels; the margin is sized to the wider of the two.
+
+---
+
 ## [1.2.11-beta.1] — 2026-03-06
 
 ### Added
-- **Column Totals** — a new **Column Totals** format card adds an optional strip
-  of summary numbers above or below the Sankey diagram, one total per stage
-  (column).  Each total is the sum of `node.value` across all nodes at that
-  column depth, which equals the total flow volume passing through that stage.
-
-  Use this to understand the overall scale at each step of the flow and then
-  read the nodes in the diagram to see how that total decomposes.
-
-  Controls:
-  - **Show Column Totals** — header toggle; off by default.
-  - **Position** — *Above* (default) or *Below* the diagram.
-  - **Font** — family, size, bold (default on), italic, underline.
-  - **Font Color** — default dark grey (#333333).
-
-  Implementation: when enabled, a reserved strip of height `fontSize + 16 px`
-  is added to the top or bottom margin before layout runs, so the totals never
-  overlap the Sankey content.  After layout, nodes are grouped by `depth`
-  (d3-sankey's column index), values are summed per group, and one `<text>`
-  element is rendered centred over each column's x-midpoint.  The totals are
-  inside the zoom layer so they scale and pan in sync with the diagram.
-  Double-click reset and the fit-to-viewport logic already account for the
-  extra margin.
+- **Column Totals** — optional strip of totals above or below the diagram, one
+  per column.  *(Superseded by Grand Total in v1.2.12.)*
 
 ---
 

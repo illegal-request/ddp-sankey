@@ -239,29 +239,19 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     public slices = [this.target, this.position, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
-// ─── Column Totals card ───────────────────────────────────────────────────────
+// ─── Grand Total card ─────────────────────────────────────────────────────────
+//
+// Displays a single total value to the left of the first column of nodes,
+// showing the total flow volume entering the diagram.
 
-const colTotPositionItems = [
-    { displayName: "Above", value: "above" },
-    { displayName: "Below", value: "below" }
-];
-
-class ColumnTotalsSettingsCard extends formattingSettings.SimpleCard {
-    public name: string = "columnTotals";
-    public displayName: string = "Column Totals";
+class GrandTotalSettingsCard extends formattingSettings.SimpleCard {
+    public name: string = "grandTotal";
+    public displayName: string = "Grand Total";
 
     public show = new formattingSettings.ToggleSwitch({
         name: "show",
-        displayName: "Show Column Totals",
+        displayName: "Show Grand Total",
         value: false
-    });
-
-    public position = new formattingSettings.ItemDropdown({
-        name: "position",
-        displayName: "Position",
-        description: "Above — totals appear in a strip above the diagram.  Below — totals appear below.",
-        items: colTotPositionItems,
-        value: colTotPositionItems[0]   // default: Above
     });
 
     // Native PBI font control: family picker + size input + B / I / U buttons
@@ -276,7 +266,7 @@ class ColumnTotalsSettingsCard extends formattingSettings.SimpleCard {
         fontSize: new formattingSettings.NumUpDown({
             name: "fontSize",
             displayName: "Text Size",
-            value: 12
+            value: 14
         }),
         bold: new formattingSettings.ToggleSwitch({
             name: "bold",
@@ -302,7 +292,7 @@ class ColumnTotalsSettingsCard extends formattingSettings.SimpleCard {
     });
 
     public topLevelSlice = this.show;
-    public slices = [this.position, this.fontControl, this.fontColor];
+    public slices = [this.fontControl, this.fontColor];
 }
 
 // ─── Root model ───────────────────────────────────────────────────────────────
@@ -312,13 +302,13 @@ export class VisualFormattingSettingsModel extends formattingSettings.Model {
     public linkSettings   = new LinkSettingsCard();
     public labelSettings  = new LabelSettingsCard();
     public valueSettings  = new ValueSettingsCard();
-    public columnTotals   = new ColumnTotalsSettingsCard();
+    public grandTotal     = new GrandTotalSettingsCard();
 
     public cards = [
         this.nodeSettings,
         this.linkSettings,
         this.labelSettings,
         this.valueSettings,
-        this.columnTotals
+        this.grandTotal
     ];
 }
