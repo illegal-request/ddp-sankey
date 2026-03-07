@@ -12,6 +12,16 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.19-beta.1] — 2026-03-06
+
+### Added
+- **Value label alignment** — new "Alignment" dropdown in the Values format
+  card (Left / Center / Right). Left anchors labels near the source node,
+  Center places them at the ribbon midpoint (previous default, unchanged),
+  Right anchors them near the target node. Applies to ribbon value labels only.
+
+---
+
 ## [1.2.18-beta.1] — 2026-03-06
 
 ### Fixed

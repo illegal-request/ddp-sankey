@@ -141,6 +141,16 @@
             ]
           }
         },
+        "alignment": {
+          "displayName": "Alignment",
+          "type": {
+            "enumeration": [
+              { "displayName": "Left",   "value": "left"   },
+              { "displayName": "Center", "value": "center" },
+              { "displayName": "Right",  "value": "right"  }
+            ]
+          }
+        },
         "fontFamily": {
           "displayName": "Font Family",
           "type": { "text": true }

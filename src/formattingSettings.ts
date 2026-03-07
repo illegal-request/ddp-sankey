@@ -154,6 +154,12 @@ const positionItems = [
     { displayName: "Auto",    value: "auto"    }
 ];
 
+const alignmentItems = [
+    { displayName: "Left",   value: "left"   },
+    { displayName: "Center", value: "center" },
+    { displayName: "Right",  value: "right"  }
+];
+
 const targetItems = [
     { displayName: "Nodes",   value: "nodes"   },
     { displayName: "Ribbons", value: "ribbons" }
@@ -181,6 +187,14 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
         displayName: "Position",
         items: positionItems,
         value: positionItems[2]   // default: Auto
+    });
+
+    public alignment = new formattingSettings.ItemDropdown({
+        name: "alignment",
+        displayName: "Alignment",
+        description: "Horizontal alignment of value labels on ribbons — Left anchors near the source node, Center places them mid-span, Right anchors near the target node",
+        items: alignmentItems,
+        value: alignmentItems[1]   // default: Center
     });
 
     public fontControl = new formattingSettings.FontControl({
@@ -243,7 +257,7 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     });
 
     public topLevelSlice = this.show;
-    public slices = [this.target, this.position, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
+    public slices = [this.target, this.position, this.alignment, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
 // ─── Grand Total card ─────────────────────────────────────────────────────────

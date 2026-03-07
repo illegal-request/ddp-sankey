@@ -358,8 +358,9 @@ export class Visual implements IVisual {
         const labelOutside = labelPos === "outside";
 
         const showValues  = valueSettings.show.value;
-        const valuePos    = String(valueSettings.position.value?.value  ?? "auto");
-        const valueTarget = String(valueSettings.target.value?.value    ?? "nodes");
+        const valuePos    = String(valueSettings.position.value?.value    ?? "auto");
+        const valueTarget = String(valueSettings.target.value?.value      ?? "nodes");
+        const valueAlign  = String(valueSettings.alignment.value?.value   ?? "center");
         const vFontFamily = valueSettings.fontControl.fontFamily.value;
         const vFontSize   = Math.max(8, valueSettings.fontControl.fontSize.value);
         const vBold       = valueSettings.fontControl.bold?.value      ?? false;
@@ -1119,16 +1120,18 @@ export class Visual implements IVisual {
                     .attr("opacity", valueBgOpacity);
             }
 
-            // Centre the label on the ribbon midpoint
+            // Position the label along the ribbon span according to alignment
             ribbonValueGs.append("text")
                 .attr("x", d => {
                     const srcX1 = (d.source as LayoutNode).x1 ?? 0;
                     const tgtX0 = (d.target as LayoutNode).x0 ?? 0;
+                    if (valueAlign === "left")  return srcX1 + 4;
+                    if (valueAlign === "right") return tgtX0 - 4;
                     return (srcX1 + tgtX0) / 2;
                 })
                 .attr("y",           d => (d.y0 + d.y1) / 2)
                 .attr("dy",          "0.35em")
-                .attr("text-anchor", "middle")
+                .attr("text-anchor", valueAlign === "left" ? "start" : valueAlign === "right" ? "end" : "middle")
                 .attr("font-family",     vFontFamily)
                 .attr("font-size",       `${vFontSize}px`)
                 .attr("font-weight",     vBold     ? "bold"      : "normal")
