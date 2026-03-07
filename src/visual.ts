@@ -346,8 +346,7 @@ export class Visual implements IVisual {
             .populateFormattingSettingsModel(VisualFormattingSettingsModel, options.dataViews[0]);
 
         const {
-            nodeSettings, linkSettings, labelSettings,
-            valueSettings, grandTotal: gtSettings
+            nodeSettings, linkSettings, labelSettings, valueSettings
         } = this.formattingSettings;
 
         const nodeWidth   = Math.max(4, nodeSettings.nodeWidth.value);
@@ -376,14 +375,6 @@ export class Visual implements IVisual {
         const vItalic     = valueSettings.fontControl.italic?.value    ?? false;
         const vUnderline  = valueSettings.fontControl.underline?.value ?? false;
         const vFontColor  = valueSettings.fontColor.value?.value       ?? "#333333";
-
-        const showGrandTotal = gtSettings.show.value;
-        const gtFontFamily   = gtSettings.fontControl.fontFamily.value;
-        const gtFontSize     = Math.max(8, gtSettings.fontControl.fontSize.value);
-        const gtBold         = gtSettings.fontControl.bold?.value      ?? true;
-        const gtItalic       = gtSettings.fontControl.italic?.value    ?? false;
-        const gtUnderline    = gtSettings.fontControl.underline?.value ?? false;
-        const gtFontColor    = gtSettings.fontColor.value?.value       ?? "#333333";
 
         const labelBg             = labelSettings.showBackground.value;
         const labelBgColor        = labelSettings.backgroundColor.value?.value  ?? "#ffffff";
@@ -546,27 +537,8 @@ export class Visual implements IVisual {
         // ── Grand total pre-computation ───────────────────────────────────────
         // The grand total = sum of all link values leaving the first column
         // (depth-0 sources, identified by the "0\x01" key prefix).  This can be
-        // computed from the raw linkMap — before layout — so we can size the left
-        // margin to fit the formatted number string.
-        let grandTotalValue = 0;
-        let grandTotalTextW = 0;
-        if (showGrandTotal) {
-            const gtFont = `${gtBold ? "bold " : ""}${gtFontSize}px ${gtFontFamily}`;
-            linkMap.forEach((value, key) => {
-                const srcKey = key.slice(0, key.indexOf("\x00"));
-                if (srcKey.startsWith("0\x01")) grandTotalValue += value;
-            });
-            grandTotalTextW = measureText(grandTotalValue.toLocaleString(), gtFont);
-        }
-
         const lbExtra  = labelBgActive ? PILL_PAD_H : 0;
-        // Grand total sits to the left of the first column, right-aligned at
-        // (firstCol.x0 - labelGap).  Its reserved left margin = text width + gap.
-        const gtPad    = showGrandTotal ? grandTotalTextW + labelGap * 2 : 0;
-        const leftPad  = Math.max(
-            (showLabels && labelOutside) ? leftLabelMaxW  + labelGap + lbExtra : 8,
-            showGrandTotal               ? gtPad                               : 8
-        );
+        const leftPad  = (showLabels && labelOutside) ? leftLabelMaxW + labelGap + lbExtra : 8;
         const rightPad = (showLabels && labelOutside) ? rightLabelMaxW + labelGap + lbExtra : 8;
         const margin   = {
             top:    8,
@@ -1303,42 +1275,6 @@ export class Visual implements IVisual {
                         .attr("rx",    (bb.height + PILL_PAD_V * 2) / 2)
                         .attr("ry",    (bb.height + PILL_PAD_V * 2) / 2);
                 });
-            }
-        }
-
-        // ── Grand total ────────────────────────────────────────────────────────
-        // Renders a single formatted total to the LEFT of the first column of
-        // nodes, right-aligned against the node face and vertically centred on
-        // the first column's vertical extent.
-        //
-        // The value (grandTotalValue) was computed before layout from the raw
-        // linkMap (sum of all flows leaving depth-0 nodes) and is already set.
-        // The left margin was expanded accordingly, so the text fits cleanly.
-        if (showGrandTotal) {
-            const depth0Nodes = graph.nodes.filter(n => (n.depth ?? 0) === 0);
-            if (depth0Nodes.length > 0) {
-                // All depth-0 nodes share the same x0 by construction; use index [0]
-                // to avoid the Infinity sentinel that reduce() would require otherwise.
-                const firstX0    = depth0Nodes[0].x0 ?? 0;
-                const firstColY0 = depth0Nodes.reduce((m, n) => Math.min(m, n.y0 ?? 0), depth0Nodes[0].y0 ?? 0);
-                const firstColY1 = depth0Nodes.reduce((m, n) => Math.max(m, n.y1 ?? 0), 0);
-                const gtY        = (firstColY0 + firstColY1) / 2;   // vertical centre of first column
-
-                this.container
-                    .append("text")
-                    .classed("grand-total", true)
-                    .attr("pointer-events", "none")
-                    .attr("x",                 firstX0 - labelGap)
-                    .attr("y",                 gtY)
-                    .attr("text-anchor",       "end")
-                    .attr("dominant-baseline", "middle")
-                    .attr("font-family",       gtFontFamily)
-                    .attr("font-size",         `${gtFontSize}px`)
-                    .attr("font-weight",       gtBold      ? "bold"      : "normal")
-                    .attr("font-style",        gtItalic    ? "italic"    : "normal")
-                    .attr("text-decoration",   gtUnderline ? "underline" : "none")
-                    .attr("fill",              gtFontColor)
-                    .text(grandTotalValue.toLocaleString());
             }
         }
 

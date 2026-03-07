@@ -49,10 +49,10 @@
       }
     },
     "linkSettings": {
-      "displayName": "Links",
+      "displayName": "Flows",
       "properties": {
         "linkOpacity": {
-          "displayName": "Link Opacity",
+          "displayName": "Flow Opacity",
           "type": { "numeric": true }
         },
         "colorBySource": {
@@ -102,7 +102,7 @@
           }
         },
         "followPath": {
-          "displayName": "Follow Link Path",
+          "displayName": "Follow Flow Path",
           "type": { "bool": true }
         },
         "showBackground": {
@@ -120,18 +120,18 @@
       }
     },
     "valueSettings": {
-      "displayName": "Values",
+      "displayName": "Data Labels",
       "properties": {
         "show": {
-          "displayName": "Show Values",
+          "displayName": "Show Data Labels",
           "type": { "bool": true }
         },
         "target": {
           "displayName": "Show On",
           "type": {
             "enumeration": [
-              { "displayName": "Nodes",   "value": "nodes"   },
-              { "displayName": "Ribbons", "value": "ribbons" }
+              { "displayName": "Nodes", "value": "nodes"   },
+              { "displayName": "Flows", "value": "ribbons" }
             ]
           }
         },
@@ -190,39 +190,6 @@
         "backgroundTransparency": {
           "displayName": "Transparency",
           "type": { "numeric": true }
-        }
-      }
-    },
-    "grandTotal": {
-      "displayName": "Grand Total",
-      "properties": {
-        "show": {
-          "displayName": "Show Grand Total",
-          "type": { "bool": true }
-        },
-        "fontFamily": {
-          "displayName": "Font Family",
-          "type": { "text": true }
-        },
-        "fontSize": {
-          "displayName": "Font Size",
-          "type": { "numeric": true }
-        },
-        "bold": {
-          "displayName": "Bold",
-          "type": { "bool": true }
-        },
-        "italic": {
-          "displayName": "Italic",
-          "type": { "bool": true }
-        },
-        "underline": {
-          "displayName": "Underline",
-          "type": { "bool": true }
-        },
-        "fontColor": {
-          "displayName": "Font Color",
-          "type": { "fill": { "solid": { "color": true } } }
         }
       }
     }

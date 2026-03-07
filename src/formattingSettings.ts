@@ -29,15 +29,15 @@ class NodeSettingsCard extends formattingSettings.SimpleCard {
     public slices = [this.nodeWidth, this.nodePadding];
 }
 
-// ─── Links card ───────────────────────────────────────────────────────────────
+// ─── Flows card ───────────────────────────────────────────────────────────────
 
 class LinkSettingsCard extends formattingSettings.SimpleCard {
     public name: string = "linkSettings";
-    public displayName: string = "Links";
+    public displayName: string = "Flows";
 
     public linkOpacity = new formattingSettings.Slider({
         name: "linkOpacity",
-        displayName: "Link Opacity",
+        displayName: "Flow Opacity",
         description: "Opacity of flow ribbons — 0% is fully transparent, 100% is fully solid",
         value: 45,
         options: {
@@ -121,8 +121,8 @@ class LabelSettingsCard extends formattingSettings.SimpleCard {
 
     public followPath = new formattingSettings.ToggleSwitch({
         name: "followPath",
-        displayName: "Follow Link Path",
-        description: "Curve labels (and their background pills) to follow the arc of each node's primary ribbon rather than staying horizontal.",
+        displayName: "Follow Flow Path",
+        description: "Curve labels (and their background pills) to follow the arc of each node's primary flow rather than staying horizontal.",
         value: false
     });
 
@@ -150,7 +150,7 @@ class LabelSettingsCard extends formattingSettings.SimpleCard {
     });
 
     public topLevelSlice = this.show;
-    public slices = [this.fontControl, this.fontColor, this.position, this.followPath, this.showBackground, this.backgroundColor, this.backgroundTransparency];
+    public slices = [this.position, this.followPath, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
 // ─── Values card ──────────────────────────────────────────────────────────────
@@ -168,17 +168,17 @@ const alignmentItems = [
 ];
 
 const targetItems = [
-    { displayName: "Nodes",   value: "nodes"   },
-    { displayName: "Ribbons", value: "ribbons" }
+    { displayName: "Nodes", value: "nodes"   },
+    { displayName: "Flows", value: "ribbons" }
 ];
 
 class ValueSettingsCard extends formattingSettings.SimpleCard {
     public name:        string = "valueSettings";
-    public displayName: string = "Values";
+    public displayName: string = "Data Labels";
 
     public show = new formattingSettings.ToggleSwitch({
         name: "show",
-        displayName: "Show Values",
+        displayName: "Show Data Labels",
         value: false
     });
 
@@ -267,62 +267,6 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     public slices = [this.target, this.position, this.alignment, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
-// ─── Grand Total card ─────────────────────────────────────────────────────────
-//
-// Displays a single total value to the left of the first column of nodes,
-// showing the total flow volume entering the diagram.
-
-class GrandTotalSettingsCard extends formattingSettings.SimpleCard {
-    public name: string = "grandTotal";
-    public displayName: string = "Grand Total";
-
-    public show = new formattingSettings.ToggleSwitch({
-        name: "show",
-        displayName: "Show Grand Total",
-        value: false
-    });
-
-    // Native PBI font control: family picker + size input + B / I / U buttons
-    public fontControl = new formattingSettings.FontControl({
-        name: "fontControl",
-        displayName: "Font",
-        fontFamily: new formattingSettings.FontPicker({
-            name: "fontFamily",
-            displayName: "Font",
-            value: "Segoe UI, wf_segoe-ui_normal, helvetica, arial, sans-serif"
-        }),
-        fontSize: new formattingSettings.NumUpDown({
-            name: "fontSize",
-            displayName: "Text Size",
-            value: 14
-        }),
-        bold: new formattingSettings.ToggleSwitch({
-            name: "bold",
-            displayName: "Bold",
-            value: true
-        }),
-        italic: new formattingSettings.ToggleSwitch({
-            name: "italic",
-            displayName: "Italic",
-            value: false
-        }),
-        underline: new formattingSettings.ToggleSwitch({
-            name: "underline",
-            displayName: "Underline",
-            value: false
-        })
-    });
-
-    public fontColor = new formattingSettings.ColorPicker({
-        name: "fontColor",
-        displayName: "Font Color",
-        value: { value: "#333333" }
-    });
-
-    public topLevelSlice = this.show;
-    public slices = [this.fontControl, this.fontColor];
-}
-
 // ─── Root model ───────────────────────────────────────────────────────────────
 
 export class VisualFormattingSettingsModel extends formattingSettings.Model {
@@ -330,13 +274,11 @@ export class VisualFormattingSettingsModel extends formattingSettings.Model {
     public linkSettings   = new LinkSettingsCard();
     public labelSettings  = new LabelSettingsCard();
     public valueSettings  = new ValueSettingsCard();
-    public grandTotal     = new GrandTotalSettingsCard();
 
     public cards = [
         this.nodeSettings,
         this.linkSettings,
         this.labelSettings,
-        this.valueSettings,
-        this.grandTotal
+        this.valueSettings
     ];
 }
