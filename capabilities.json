@@ -151,6 +151,10 @@
             ]
           }
         },
+        "followPath": {
+          "displayName": "Follow Link Path",
+          "type": { "bool": true }
+        },
         "fontFamily": {
           "displayName": "Font Family",
           "type": { "text": true }

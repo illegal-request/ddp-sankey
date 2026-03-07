@@ -12,6 +12,17 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.20-beta.1] — 2026-03-06
+
+### Added
+- **Follow Link Path** — new toggle in the Values format card. When enabled,
+  ribbon value labels curve to follow the ribbon's bezier arc instead of
+  remaining horizontal. The background pill also curves, rendered as a
+  rounded "sausage" stroke along the same arc using SVG stroke-dasharray
+  to cover exactly the text span. Works with all three Alignment settings.
+
+---
+
 ## [1.2.19-beta.1] — 2026-03-06
 
 ### Added

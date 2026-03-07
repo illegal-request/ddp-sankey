@@ -197,6 +197,13 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
         value: alignmentItems[1]   // default: Center
     });
 
+    public followPath = new formattingSettings.ToggleSwitch({
+        name: "followPath",
+        displayName: "Follow Link Path",
+        description: "Curve value labels (and their background pills) to follow the arc of each ribbon rather than remaining horizontal. Applies to ribbon labels only.",
+        value: false
+    });
+
     public fontControl = new formattingSettings.FontControl({
         name: "fontControl",
         displayName: "Font",
@@ -257,7 +264,7 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     });
 
     public topLevelSlice = this.show;
-    public slices = [this.target, this.position, this.alignment, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
+    public slices = [this.target, this.position, this.alignment, this.followPath, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
 // ─── Grand Total card ─────────────────────────────────────────────────────────

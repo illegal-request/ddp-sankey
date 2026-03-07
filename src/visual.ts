@@ -269,6 +269,14 @@ export class Visual implements IVisual {
     private selectionType:     "none" | "node" | "link" = "none";
     private selectedKey:       string = "";
     private currentLinkOpacity: number = 0.45;
+    // Per-instance ID prefix so <defs> path IDs don't collide when multiple
+    // instances of this visual appear on the same report page.
+    // window.crypto.getRandomValues() used per linter requirement (insecure-random).
+    private readonly instanceUid: string = (() => {
+        const a = new Uint32Array(2);
+        window.crypto.getRandomValues(a);
+        return `sk${a[0].toString(36)}${a[1].toString(36)}`;
+    })();
     // Most-recent fit-to-viewport transform — updated on every render and used
     // as the initial zoom state and the double-click reset target.
     private fitTransform: ZoomTransform = zoomIdentity;
@@ -361,6 +369,7 @@ export class Visual implements IVisual {
         const valuePos    = String(valueSettings.position.value?.value    ?? "auto");
         const valueTarget = String(valueSettings.target.value?.value      ?? "nodes");
         const valueAlign  = String(valueSettings.alignment.value?.value   ?? "center");
+        const followPath  = (valueSettings.followPath.value ?? false) && valueTarget === "ribbons";
         const vFontFamily = valueSettings.fontControl.fontFamily.value;
         const vFontSize   = Math.max(8, valueSettings.fontControl.fontSize.value);
         const vBold       = valueSettings.fontControl.bold?.value      ?? false;
@@ -1105,55 +1114,165 @@ export class Visual implements IVisual {
 
         // ── Value labels — ribbons ─────────────────────────────────────────────
         if (showValues && valueTarget === "ribbons") {
-            const ribbonValueGs = this.container
-                .append("g")
-                .classed("link-labels", true)
-                .attr("pointer-events", "none")
-                .selectAll<SVGGElement, LayoutLink>("g")
-                .data(graph.links)
-                .join("g");
+            const pillH = vFontSize + PILL_PAD_V * 2;
 
-            if (valueBgActive) {
-                ribbonValueGs.append("rect")
-                    .classed("value-pill", true)
-                    .attr("fill",    valueBgColor)
-                    .attr("opacity", valueBgOpacity);
-            }
+            if (followPath) {
+                // ── Curved mode ────────────────────────────────────────────────
+                // Text follows the ribbon's cubic-bezier centerline via <textPath>.
+                // The background pill is rendered as a partial stroke along the
+                // same path using stroke-dasharray to cover only the text span.
 
-            // Position the label along the ribbon span according to alignment
-            ribbonValueGs.append("text")
-                .attr("x", d => {
+                // Centerline paths stored in <defs> (never rendered directly).
+                // IDs are prefixed with this.instanceUid to avoid collisions across
+                // multiple visual instances on the same report page.
+                // linkIds maps each LayoutLink to its unique defs path ID so D3
+                // callbacks can look up the id by datum without needing the index.
+                const defs    = this.container.append("defs");
+                const linkIds = new Map<LayoutLink, string>();
+                graph.links.forEach((d: LayoutLink, i: number) => {
+                    const id    = `${this.instanceUid}-cl-${i}`;
                     const srcX1 = (d.source as LayoutNode).x1 ?? 0;
                     const tgtX0 = (d.target as LayoutNode).x0 ?? 0;
-                    if (valueAlign === "left")  return srcX1 + 4;
-                    if (valueAlign === "right") return tgtX0 - 4;
-                    return (srcX1 + tgtX0) / 2;
-                })
-                .attr("y",           d => (d.y0 + d.y1) / 2)
-                .attr("dy",          "0.35em")
-                .attr("text-anchor", valueAlign === "left" ? "start" : valueAlign === "right" ? "end" : "middle")
-                .attr("font-family",     vFontFamily)
-                .attr("font-size",       `${vFontSize}px`)
-                .attr("font-weight",     vBold     ? "bold"      : "normal")
-                .attr("font-style",      vItalic   ? "italic"    : "normal")
-                .attr("text-decoration", vUnderline ? "underline" : "none")
-                .attr("fill",            vFontColor)
-                .text(d => d.value.toLocaleString());
-
-            if (valueBgActive) {
-                ribbonValueGs.each(function () {
-                    const grp    = select(this);
-                    const textEl = grp.select<SVGTextElement>("text").node();
-                    if (!textEl) return;
-                    const bb = textEl.getBBox();
-                    grp.select<SVGRectElement>("rect.value-pill")
-                        .attr("x",      bb.x - PILL_PAD_H)
-                        .attr("y",      bb.y - PILL_PAD_V)
-                        .attr("width",  bb.width  + PILL_PAD_H * 2)
-                        .attr("height", bb.height + PILL_PAD_V * 2)
-                        .attr("rx",    (bb.height + PILL_PAD_V * 2) / 2)
-                        .attr("ry",    (bb.height + PILL_PAD_V * 2) / 2);
+                    const cx    = (srcX1 + tgtX0) / 2;
+                    linkIds.set(d, id);
+                    defs.append("path")
+                        .attr("id", id)
+                        .attr("d", `M${srcX1},${d.y0} C${cx},${d.y0} ${cx},${d.y1} ${tgtX0},${d.y1}`);
                 });
+
+                // Alignment → textPath attributes
+                const startOffset = valueAlign === "left" ? "0%"   : valueAlign === "right" ? "100%" : "50%";
+                const textAnchor  = valueAlign === "left" ? "start" : valueAlign === "right" ? "end"  : "middle";
+                const dxShift     = valueAlign === "left" ? "8"    : valueAlign === "right" ? "-8"   : "0";
+
+                const ribbonValueGs = this.container
+                    .append("g")
+                    .classed("link-labels", true)
+                    .attr("pointer-events", "none")
+                    .selectAll<SVGGElement, LayoutLink>("g")
+                    .data(graph.links)
+                    .join("g");
+
+                // Curved pill: a partial stroke along the centerline path.
+                // stroke-dasharray / dashoffset are set after text measurement below.
+                if (valueBgActive) {
+                    ribbonValueGs.append("path")
+                        .classed("value-pill-path", true)
+                        .attr("d", (d: LayoutLink) => {
+                            const srcX1 = (d.source as LayoutNode).x1 ?? 0;
+                            const tgtX0 = (d.target as LayoutNode).x0 ?? 0;
+                            const cx    = (srcX1 + tgtX0) / 2;
+                            return `M${srcX1},${d.y0} C${cx},${d.y0} ${cx},${d.y1} ${tgtX0},${d.y1}`;
+                        })
+                        .attr("fill",           "none")
+                        .attr("stroke",         valueBgColor)
+                        .attr("stroke-opacity", valueBgOpacity)
+                        .attr("stroke-width",   pillH)
+                        .attr("stroke-linecap", "round");
+                }
+
+                // Text on path
+                ribbonValueGs.append("text")
+                    .attr("dominant-baseline", "central")
+                    .attr("font-family",       vFontFamily)
+                    .attr("font-size",         `${vFontSize}px`)
+                    .attr("font-weight",       vBold      ? "bold"      : "normal")
+                    .attr("font-style",        vItalic    ? "italic"    : "normal")
+                    .attr("text-decoration",   vUnderline ? "underline" : "none")
+                    .attr("fill",              vFontColor)
+                    .append("textPath")
+                    .attr("href",        (d: LayoutLink) => `#${linkIds.get(d) ?? ""}`)
+                    .attr("startOffset", startOffset)
+                    .attr("text-anchor", textAnchor)
+                    .attr("dx",          dxShift)
+                    .text((d: LayoutLink) => d.value.toLocaleString());
+
+                // Measure text length and position the pill dash accordingly
+                if (valueBgActive) {
+                    // valueAlign is captured from the outer lexical scope via closure
+                    ribbonValueGs.each(function () {
+                        const grp        = select(this);
+                        const tpEl       = grp.select<SVGTextPathElement>("textPath").node();
+                        const pillPathEl = grp.select<SVGPathElement>("path.value-pill-path").node();
+                        if (!tpEl || !pillPathEl) return;
+
+                        const textLen = tpEl.getComputedTextLength();
+                        const pathLen = pillPathEl.getTotalLength();
+                        const pillW   = textLen + PILL_PAD_H * 2;
+
+                        // Compute where along the arc the pill dash should start.
+                        // Matches the text position implied by startOffset + dx + text-anchor.
+                        let pillStart: number;
+                        if (valueAlign === "left") {
+                            // text starts at dx=8 from path origin; pill left-pads by PILL_PAD_H
+                            pillStart = Math.max(0, 8 - PILL_PAD_H);
+                        } else if (valueAlign === "right") {
+                            // text end-anchor at pathLen, pulled back by dx=8
+                            pillStart = pathLen - 8 - textLen - PILL_PAD_H;
+                        } else {
+                            // centred at pathLen / 2
+                            pillStart = pathLen / 2 - pillW / 2;
+                        }
+                        pillStart = Math.max(0, pillStart);
+
+                        grp.select<SVGPathElement>("path.value-pill-path")
+                            .attr("stroke-dasharray",  `${pillW},99999`)
+                            .attr("stroke-dashoffset", -pillStart);
+                    });
+                }
+
+            } else {
+                // ── Flat mode: horizontal text + rounded-rect pill (original) ──
+                const ribbonValueGs = this.container
+                    .append("g")
+                    .classed("link-labels", true)
+                    .attr("pointer-events", "none")
+                    .selectAll<SVGGElement, LayoutLink>("g")
+                    .data(graph.links)
+                    .join("g");
+
+                if (valueBgActive) {
+                    ribbonValueGs.append("rect")
+                        .classed("value-pill", true)
+                        .attr("fill",    valueBgColor)
+                        .attr("opacity", valueBgOpacity);
+                }
+
+                // Position the label along the ribbon span according to alignment
+                ribbonValueGs.append("text")
+                    .attr("x", (d: LayoutLink) => {
+                        const srcX1 = (d.source as LayoutNode).x1 ?? 0;
+                        const tgtX0 = (d.target as LayoutNode).x0 ?? 0;
+                        if (valueAlign === "left")  return srcX1 + 4;
+                        if (valueAlign === "right") return tgtX0 - 4;
+                        return (srcX1 + tgtX0) / 2;
+                    })
+                    .attr("y",           (d: LayoutLink) => (d.y0 + d.y1) / 2)
+                    .attr("dy",          "0.35em")
+                    .attr("text-anchor", valueAlign === "left" ? "start" : valueAlign === "right" ? "end" : "middle")
+                    .attr("font-family",     vFontFamily)
+                    .attr("font-size",       `${vFontSize}px`)
+                    .attr("font-weight",     vBold     ? "bold"      : "normal")
+                    .attr("font-style",      vItalic   ? "italic"    : "normal")
+                    .attr("text-decoration", vUnderline ? "underline" : "none")
+                    .attr("fill",            vFontColor)
+                    .text((d: LayoutLink) => d.value.toLocaleString());
+
+                if (valueBgActive) {
+                    ribbonValueGs.each(function () {
+                        const grp    = select(this);
+                        const textEl = grp.select<SVGTextElement>("text").node();
+                        if (!textEl) return;
+                        const bb = textEl.getBBox();
+                        grp.select<SVGRectElement>("rect.value-pill")
+                            .attr("x",      bb.x - PILL_PAD_H)
+                            .attr("y",      bb.y - PILL_PAD_V)
+                            .attr("width",  bb.width  + PILL_PAD_H * 2)
+                            .attr("height", bb.height + PILL_PAD_V * 2)
+                            .attr("rx",    (bb.height + PILL_PAD_V * 2) / 2)
+                            .attr("ry",    (bb.height + PILL_PAD_V * 2) / 2);
+                    });
+                }
             }
         }
 
