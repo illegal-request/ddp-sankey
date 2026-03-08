@@ -989,33 +989,23 @@ export class Visual implements IVisual {
                 }
 
                 // 2. Register a per-node label path in <defs>.
-                //    Only create a curved path when the ribbon's centre is far enough
-                //    from the node midpoint that a flat label wouldn't connect to it
-                //    naturally (threshold = ribbon half-height + half font-size).
-                //    For everything else the existing flat-label fallback in step 4 is used.
-                //
-                //    The node-side control point is set to nodeMidY so the bezier has a
-                //    HORIZONTAL tangent at the node endpoint — this keeps the round pill
-                //    caps horizontal and gives even left/right text padding.
+                //    Every node with a primary link gets a curved path. The node-side
+                //    control point is set to nodeMidY so the bezier has a HORIZONTAL
+                //    tangent at the node endpoint — this keeps the round pill caps
+                //    horizontal and gives even left/right text padding.
                 const nodeLabelIds = new Map<LayoutNode, string>();
                 const defs = this.container.append("defs");
                 let pathIdx = 0;
                 for (const [nd, link] of nodePrimaryLink.entries()) {
-                    const srcX1      = (link.source as LayoutNode).x1 ?? 0;
-                    const tgtX0      = (link.target as LayoutNode).x0 ?? 0;
-                    const cx         = (srcX1 + tgtX0) / 2;
-                    const usesOut    = (nd.x0 ?? 0) < innerW / 2 || ((nd.targetLinks ?? []) as LayoutLink[]).length === 0;
-                    const nodeMidY   = ((nd.y0 ?? 0) + (nd.y1 ?? 0)) / 2;
-                    const linkY      = usesOut ? link.y0 : link.y1;
-                    const ribbonHalf = ((link as any).width ?? 0) / 2;
-                    // Skip curved rendering — use flat fallback — when the ribbon
-                    // centre is close enough to the node centre that no visible
-                    // curvature is needed within the label's text span.
-                    if (Math.abs(linkY - nodeMidY) <= ribbonHalf + fontSize / 2) continue;
-                    const id    = `${this.instanceUid}-lb-${pathIdx++}`;
-                    // Horizontal tangent at the node-side endpoint: set the
-                    // adjacent control point y equal to nodeMidY.
-                    const pathD = usesOut
+                    const id       = `${this.instanceUid}-lb-${pathIdx++}`;
+                    const srcX1    = (link.source as LayoutNode).x1 ?? 0;
+                    const tgtX0    = (link.target as LayoutNode).x0 ?? 0;
+                    const cx       = (srcX1 + tgtX0) / 2;
+                    const usesOut  = (nd.x0 ?? 0) < innerW / 2 || ((nd.targetLinks ?? []) as LayoutLink[]).length === 0;
+                    const nodeMidY = ((nd.y0 ?? 0) + (nd.y1 ?? 0)) / 2;
+                    // Horizontal tangent at the node-side endpoint: match the
+                    // adjacent control point y to nodeMidY.
+                    const pathD    = usesOut
                         ? `M${srcX1},${nodeMidY} C${cx},${nodeMidY} ${cx},${link.y1} ${tgtX0},${link.y1}`
                         : `M${srcX1},${link.y0} C${cx},${link.y0} ${cx},${nodeMidY} ${tgtX0},${nodeMidY}`;
                     nodeLabelIds.set(nd, id);
@@ -1024,9 +1014,9 @@ export class Visual implements IVisual {
                         .attr("d", pathD);
                 }
 
-                // 3. Curved pill stroke paths — only for nodes that will receive a
-                //    curved textPath (i.e. have an entry in nodeLabelIds).
-                //    Flat-fallback nodes get their pill in step 5 instead.
+                // 3. Curved pill stroke paths — one per node that has a primary link.
+                //    Nodes with no primary link (isolated, no ribbons) get their pill
+                //    in step 5's flat-fallback branch instead.
                 if (labelBgActive) {
                     labelGs.each(function (d: LayoutNode) {
                         if (!nodeLabelIds.get(d)) return; // flat-fallback node

@@ -12,6 +12,19 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.26-beta.1] — 2026-03-07
+
+### Fixed
+- **Follow Flow Path — labels not curving** — the v1.2.25 smart-curve threshold
+  used `ribbonHalf` (half the ribbon's pixel thickness) as part of its cutoff.
+  For large dominant ribbons `ribbonHalf` could be 60–80 px, making the threshold
+  so wide that almost no node ever qualified for curved rendering. The threshold
+  has been removed; every node with a primary link now receives a curved path.
+  The horizontal-tangent bezier fix from v1.2.25 is retained, so pill centering
+  remains correct.
+
+---
+
 ## [1.2.25-beta.1] — 2026-03-07
 
 ### Fixed
