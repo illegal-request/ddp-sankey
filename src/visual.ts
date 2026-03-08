@@ -989,34 +989,47 @@ export class Visual implements IVisual {
                 }
 
                 // 2. Register a per-node label path in <defs>.
-                //    Each path is anchored at the node's vertical midpoint so the
-                //    text always starts/ends at the node centre (matching flat mode),
-                //    while the bezier control points follow the ribbon's natural y-coords
-                //    so the curve still flows toward the ribbon's opposite end.
+                //    Only create a curved path when the ribbon's centre is far enough
+                //    from the node midpoint that a flat label wouldn't connect to it
+                //    naturally (threshold = ribbon half-height + half font-size).
+                //    For everything else the existing flat-label fallback in step 4 is used.
+                //
+                //    The node-side control point is set to nodeMidY so the bezier has a
+                //    HORIZONTAL tangent at the node endpoint — this keeps the round pill
+                //    caps horizontal and gives even left/right text padding.
                 const nodeLabelIds = new Map<LayoutNode, string>();
                 const defs = this.container.append("defs");
                 let pathIdx = 0;
                 for (const [nd, link] of nodePrimaryLink.entries()) {
-                    const id       = `${this.instanceUid}-lb-${pathIdx++}`;
-                    const srcX1    = (link.source as LayoutNode).x1 ?? 0;
-                    const tgtX0    = (link.target as LayoutNode).x0 ?? 0;
-                    const cx       = (srcX1 + tgtX0) / 2;
-                    const usesOut  = (nd.x0 ?? 0) < innerW / 2 || ((nd.targetLinks ?? []) as LayoutLink[]).length === 0;
-                    const nodeMidY = ((nd.y0 ?? 0) + (nd.y1 ?? 0)) / 2;
-                    // Anchor start (outgoing) or end (incoming) at the node's y-centre.
-                    const pathD    = usesOut
-                        ? `M${srcX1},${nodeMidY} C${cx},${link.y0} ${cx},${link.y1} ${tgtX0},${link.y1}`
-                        : `M${srcX1},${link.y0} C${cx},${link.y0} ${cx},${link.y1} ${tgtX0},${nodeMidY}`;
+                    const srcX1      = (link.source as LayoutNode).x1 ?? 0;
+                    const tgtX0      = (link.target as LayoutNode).x0 ?? 0;
+                    const cx         = (srcX1 + tgtX0) / 2;
+                    const usesOut    = (nd.x0 ?? 0) < innerW / 2 || ((nd.targetLinks ?? []) as LayoutLink[]).length === 0;
+                    const nodeMidY   = ((nd.y0 ?? 0) + (nd.y1 ?? 0)) / 2;
+                    const linkY      = usesOut ? link.y0 : link.y1;
+                    const ribbonHalf = ((link as any).width ?? 0) / 2;
+                    // Skip curved rendering — use flat fallback — when the ribbon
+                    // centre is close enough to the node centre that no visible
+                    // curvature is needed within the label's text span.
+                    if (Math.abs(linkY - nodeMidY) <= ribbonHalf + fontSize / 2) continue;
+                    const id    = `${this.instanceUid}-lb-${pathIdx++}`;
+                    // Horizontal tangent at the node-side endpoint: set the
+                    // adjacent control point y equal to nodeMidY.
+                    const pathD = usesOut
+                        ? `M${srcX1},${nodeMidY} C${cx},${nodeMidY} ${cx},${link.y1} ${tgtX0},${link.y1}`
+                        : `M${srcX1},${link.y0} C${cx},${link.y0} ${cx},${nodeMidY} ${tgtX0},${nodeMidY}`;
                     nodeLabelIds.set(nd, id);
                     defs.append("path")
                         .attr("id", id)
                         .attr("d", pathD);
                 }
 
-                // 3. Curved pill stroke paths — dasharray sized after text measurement below.
-                //    Use the same per-node anchored path so the pill aligns with the text.
+                // 3. Curved pill stroke paths — only for nodes that will receive a
+                //    curved textPath (i.e. have an entry in nodeLabelIds).
+                //    Flat-fallback nodes get their pill in step 5 instead.
                 if (labelBgActive) {
                     labelGs.each(function (d: LayoutNode) {
+                        if (!nodeLabelIds.get(d)) return; // flat-fallback node
                         const link = nodePrimaryLink.get(d);
                         if (!link) return;
                         const srcX1    = (link.source as LayoutNode).x1 ?? 0;
@@ -1024,9 +1037,10 @@ export class Visual implements IVisual {
                         const cx       = (srcX1 + tgtX0) / 2;
                         const usesOut  = (d.x0 ?? 0) < innerW / 2 || ((d.targetLinks ?? []) as LayoutLink[]).length === 0;
                         const nodeMidY = ((d.y0 ?? 0) + (d.y1 ?? 0)) / 2;
+                        // Same horizontal-tangent bezier used in the defs path.
                         const pathD    = usesOut
-                            ? `M${srcX1},${nodeMidY} C${cx},${link.y0} ${cx},${link.y1} ${tgtX0},${link.y1}`
-                            : `M${srcX1},${link.y0} C${cx},${link.y0} ${cx},${link.y1} ${tgtX0},${nodeMidY}`;
+                            ? `M${srcX1},${nodeMidY} C${cx},${nodeMidY} ${cx},${link.y1} ${tgtX0},${link.y1}`
+                            : `M${srcX1},${link.y0} C${cx},${link.y0} ${cx},${nodeMidY} ${tgtX0},${nodeMidY}`;
                         select(this).append("path")
                             .classed("label-pill-path", true)
                             .attr("d", pathD)
@@ -1082,34 +1096,45 @@ export class Visual implements IVisual {
                         .text(d.label);
                 });
 
-                // 5. Measure text and position the curved pill dash.
+                // 5. Finalise pill backgrounds.
+                //    • Curved nodes  → size the dasharray on the pill-path stroke.
+                //    • Flat-fallback → insert a flat stroked-path pill before the text.
                 if (labelBgActive) {
                     labelGs.each(function (d: LayoutNode) {
-                        const grp        = select(this);
-                        const tpEl       = grp.select<SVGTextPathElement>("textPath").node();
-                        const pillPathEl = grp.select<SVGPathElement>("path.label-pill-path").node();
-                        if (!tpEl || !pillPathEl) return;
+                        const grp  = select(this);
+                        const tpEl = grp.select<SVGTextPathElement>("textPath").node();
 
-                        const usesOutgoing = (d.x0 ?? 0) < innerW / 2 || ((d.targetLinks ?? []) as LayoutLink[]).length === 0;
-                        const textLen      = tpEl.getComputedTextLength();
-                        const pathLen      = pillPathEl.getTotalLength();
-                        // Round end-caps on the stroke provide the visual horizontal
-                        // padding — no extra PILL_PAD_H needed here.
-                        const pillW = textLen;
-
-                        // Align pill with the text: text starts at dx=8 from the path
-                        // origin (outgoing) or ends at pathLen-8 (incoming).
-                        let pillStart: number;
-                        if (usesOutgoing) {
-                            pillStart = 8;
+                        if (tpEl) {
+                            // ── Curved node: position the dash on the pill stroke ──
+                            const pillPathEl = grp.select<SVGPathElement>("path.label-pill-path").node();
+                            if (!pillPathEl) return;
+                            const usesOutgoing = (d.x0 ?? 0) < innerW / 2 || ((d.targetLinks ?? []) as LayoutLink[]).length === 0;
+                            const textLen      = tpEl.getComputedTextLength();
+                            const pathLen      = pillPathEl.getTotalLength();
+                            // Round end-caps provide the visual horizontal padding —
+                            // pill width equals text length exactly.
+                            const pillW = textLen;
+                            // Text starts at dx=8 from the path origin (outgoing) or
+                            // ends at pathLen-8 (incoming); align pill to match.
+                            let pillStart = usesOutgoing ? 8 : pathLen - 8 - textLen;
+                            pillStart = Math.max(0, pillStart);
+                            grp.select<SVGPathElement>("path.label-pill-path")
+                                .attr("stroke-dasharray",  `${pillW},99999`)
+                                .attr("stroke-dashoffset", -pillStart);
                         } else {
-                            pillStart = pathLen - 8 - textLen;
+                            // ── Flat-fallback node: insert a flat pill behind the text ──
+                            const textEl = grp.select<SVGTextElement>("text").node();
+                            if (!textEl) return;
+                            const bb = textEl.getBBox();
+                            select(this).insert("path", "text")
+                                .classed("label-pill", true)
+                                .attr("d",              `M${bb.x},${bb.y + bb.height / 2} H${bb.x + bb.width}`)
+                                .attr("fill",           "none")
+                                .attr("stroke",         labelBgColor)
+                                .attr("stroke-opacity", labelBgOpacity)
+                                .attr("stroke-width",   bb.height + PILL_PAD_V * 2)
+                                .attr("stroke-linecap", "round");
                         }
-                        pillStart = Math.max(0, pillStart);
-
-                        grp.select<SVGPathElement>("path.label-pill-path")
-                            .attr("stroke-dasharray",  `${pillW},99999`)
-                            .attr("stroke-dashoffset", -pillStart);
                     });
                 }
 
