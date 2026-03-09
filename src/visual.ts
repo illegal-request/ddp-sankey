@@ -72,6 +72,37 @@ function measureText(text: string, font: string): number {
 const PILL_PAD_V = 3;   // top and bottom
 const PILL_PAD_H = 8;   // left and right
 
+/**
+ * Given a raw displayUnits setting ("auto"|"none"|"thousands"|"millions"|"billions")
+ * and the set of all node values, return the resolved unit string (never "auto").
+ */
+function resolveDisplayUnit(setting: string, nodeValues: number[]): string {
+    if (setting !== "auto") return setting;
+    const max = nodeValues.length ? Math.max(...nodeValues.map(v => Math.abs(v))) : 0;
+    if (max >= 1e9) return "billions";
+    if (max >= 1e6) return "millions";
+    if (max >= 1e3) return "thousands";
+    return "none";
+}
+
+/**
+ * Format a numeric value using the resolved display unit and decimal places.
+ * "none"      — locale-formatted raw number (e.g. 1,234,567)
+ * "thousands" — divided by 1 000 with "K" suffix
+ * "millions"  — divided by 1 000 000 with "M" suffix
+ * "billions"  — divided by 1 000 000 000 with "B" suffix
+ */
+function formatDataValue(v: number, unit: string, decimals: number): string {
+    const locFmt = (n: number) =>
+        n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    switch (unit) {
+        case "thousands": return locFmt(v / 1e3) + "K";
+        case "millions":  return locFmt(v / 1e6) + "M";
+        case "billions":  return locFmt(v / 1e9) + "B";
+        default:          return locFmt(v);
+    }
+}
+
 /** Cubic-bezier ribbon path for one SubRibbon (top + bottom edges). */
 function subRibbonPath(d: SubRibbon): string {
     const cx = (d.srcX1 + d.tgtX0) / 2;
@@ -365,11 +396,13 @@ export class Visual implements IVisual {
         const labelOutside   = labelPos === "outside";
         const labelFollowPath = (labelSettings.followPath.value ?? false);
 
-        const showValues  = valueSettings.show.value;
-        const valuePos    = String(valueSettings.position.value?.value    ?? "auto");
-        const valueTarget = String(valueSettings.target.value?.value      ?? "nodes");
-        const valueAlign  = String(valueSettings.alignment.value?.value   ?? "center");
-        const vFontFamily = valueSettings.fontControl.fontFamily.value;
+        const showValues      = valueSettings.show.value;
+        const valuePos        = String(valueSettings.position.value?.value    ?? "auto");
+        const valueTarget     = String(valueSettings.target.value?.value      ?? "nodes");
+        const valueAlign      = String(valueSettings.alignment.value?.value   ?? "center");
+        const vDisplayUnits   = String(valueSettings.displayUnits.value?.value ?? "auto");
+        const vDecimalPlaces  = Math.max(0, Math.min(10, valueSettings.decimalPlaces.value ?? 0));
+        const vFontFamily     = valueSettings.fontControl.fontFamily.value;
         const vFontSize   = Math.max(8, valueSettings.fontControl.fontSize.value);
         const vBold       = valueSettings.fontControl.bold?.value      ?? false;
         const vItalic     = valueSettings.fontControl.italic?.value    ?? false;
@@ -567,6 +600,12 @@ export class Visual implements IVisual {
             return;
         }
 
+        // ── Value formatter ───────────────────────────────────────────────────
+        // Resolve "auto" unit once using the full set of node values, then build
+        // a convenience wrapper used everywhere a data value is rendered.
+        const resolvedUnit = resolveDisplayUnit(vDisplayUnits, graph.nodes.map(n => n.value ?? 0));
+        const fmtVal = (v: number) => formatDataValue(v, resolvedUnit, vDecimalPlaces);
+
         // ── Effective node width (minimum to hold value label text) ───────────
         // When value labels are positioned inside a node, the node must be at
         // least wide enough to contain the formatted number string.  Measure
@@ -577,7 +616,7 @@ export class Visual implements IVisual {
             // When a pill background is active, node must also accommodate horizontal pill padding
             const nodePad  = valueBgActive ? PILL_PAD_H * 2 : 8; // pill: 8 px each side; plain: 4 px
             for (const nd of graph.nodes) {
-                const tw = measureText((nd.value ?? 0).toLocaleString(), font);
+                const tw = measureText(fmtVal(nd.value ?? 0), font);
                 if (tw + nodePad > effectiveNodeWidth) effectiveNodeWidth = tw + nodePad;
             }
             // Cap expansion so ribbons stay at least 40 px wide regardless of font size.
@@ -777,54 +816,51 @@ export class Visual implements IVisual {
             const srcPos = new Map<string, {top: number; bot: number}>();
             const tgtPos = new Map<string, {top: number; bot: number}>();
 
+            // nodeDrawFrac: draw-width-based source fractions, propagated in
+            // depth order.  Unlike nodeContrib (which uses link *values*),
+            // these fractions reflect the actual pixel draw widths, so that
+            // minRibbonHeight inflation on thin links is honoured at every
+            // downstream node.  We compute incoming bands first, derive
+            // ndDrawFrac, then use it for outgoing bands — keeping both sides
+            // of every node consistent and preventing hairline sub-ribbons.
+            const nodeDrawFrac = new Map<string, Map<string, number>>();
+
             for (const nd of ([...graph.nodes as LayoutNode[]]
                               .sort((a, b) => (a.depth ?? 0) - (b.depth ?? 0)))) {
-                const nodeH    = (nd.y1 ?? 0) - (nd.y0 ?? 0);
                 const srcLinks = (nd.sourceLinks ?? []) as LayoutLink[];
                 const tgtLinks = (nd.targetLinks ?? []) as LayoutLink[];
                 const ndSrcs   = [...(nodeContrib.get(nd.name) ?? new Map<string, number>()).entries()]
                     .sort((a, b) => (depth0Order.get(a[0]) ?? 0) - (depth0Order.get(b[0]) ?? 0));
 
-                // ── Right side: source-side positions of outgoing links ────────
-                // Band heights derived from actual linkDrawW values (same reason
-                // as left side — minRibbonHeight inflation must be accounted for).
-                const outBandH = new Map<string, number>(ndSrcs.map(([s]) => [s, 0] as [string, number]));
-                for (const lnk of srcLinks) {
-                    const key2  = `${nd.name}\x00${(lnk.target as LayoutNode).name}`;
-                    const fullW2 = linkDrawW.get(key2) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-                    for (const [s, frac] of ndSrcs) { outBandH.set(s, (outBandH.get(s) ?? 0) + fullW2 * frac); }
-                }
-                const outCursor = new Map<string, number>();
-                { let y = nd.y0 ?? 0;
-                  for (const [s] of ndSrcs) { outCursor.set(s, y); y += outBandH.get(s) ?? 0; } }
-
-                for (const lnk of srcLinks) {
-                    const key  = `${nd.name}\x00${(lnk.target as LayoutNode).name}`;
-                    const fullW = linkDrawW.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-                    for (const [s, frac] of ndSrcs) {
-                        const subW = fullW * frac;
-                        const cur  = outCursor.get(s) ?? 0;
-                        srcPos.set(`${key}\x00${s}`, {top: cur, bot: cur + subW});
-                        outCursor.set(s, cur + subW);
-                    }
-                }
-
-                // ── Left side: target-side positions of incoming links ─────────
-                // Band heights are derived from the actual linkDrawW_tgt values,
-                // NOT from nodeContrib fractions × nodeH.  When minRibbonHeight
-                // inflates a thin link's draw width, using the value-based fraction
-                // would produce a band smaller than the inflated ribbon, causing
-                // sub-ribbons to overflow into adjacent bands and visually overlap.
+                // ── Left side first: derive draw-width fractions ───────────────
+                // Incoming band heights use the actual linkDrawW_tgt values and
+                // the source node's draw-width fractions (nodeDrawFrac, already
+                // computed for earlier depth levels).  This correctly propagates
+                // minRibbonHeight inflation through every section of the chart.
                 const inBandH = new Map<string, number>(ndSrcs.map(([s]) => [s, 0] as [string, number]));
                 for (const lnk of tgtLinks) {
                     const srcNd2  = lnk.source as LayoutNode;
                     const key2    = `${srcNd2.name}\x00${nd.name}`;
                     const fullW2  = linkDrawW_tgt.get(key2) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-                    const lnkC    = nodeContrib.get(srcNd2.name) ?? new Map<string, number>();
+                    // Use draw-width fracs from the source node (falls back to
+                    // nodeContrib for depth-0 nodes not yet in nodeDrawFrac).
+                    const lnkC   = nodeDrawFrac.get(srcNd2.name) ?? nodeContrib.get(srcNd2.name) ?? new Map<string, number>();
                     for (const [s] of ndSrcs) {
                         inBandH.set(s, (inBandH.get(s) ?? 0) + fullW2 * (lnkC.get(s) ?? 0));
                     }
                 }
+
+                // Normalise inBandH to fractions.  Depth-0 nodes have no
+                // incoming links (totalInBandH = 0) so fall back to nodeContrib
+                // ({self: 1.0}), which is always exact for source nodes.
+                const totalInBandH = [...inBandH.values()].reduce((a, b) => a + b, 0);
+                const ndDrawFrac: Map<string, number> = totalInBandH > 0
+                    ? new Map<string, number>([...inBandH.entries()].map(([s, h]) => [s, h / totalInBandH]))
+                    : new Map<string, number>(ndSrcs.map(([s, f]) => [s, f]));
+                nodeDrawFrac.set(nd.name, ndDrawFrac);
+
+                // tgtPos: position each incoming link's sub-ribbons within
+                // the per-source bands derived above.
                 const inCursor = new Map<string, number>();
                 { let y = nd.y0 ?? 0;
                   for (const [s] of ndSrcs) { inCursor.set(s, y); y += inBandH.get(s) ?? 0; } }
@@ -833,25 +869,56 @@ export class Visual implements IVisual {
                     const srcNd      = lnk.source as LayoutNode;
                     const key        = `${srcNd.name}\x00${nd.name}`;
                     const fullW      = linkDrawW_tgt.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
-                    const lnkContrib = nodeContrib.get(srcNd.name) ?? new Map<string, number>();
-                    for (const [s, _frac] of ndSrcs) {
+                    const lnkContrib = nodeDrawFrac.get(srcNd.name) ?? nodeContrib.get(srcNd.name) ?? new Map<string, number>();
+                    for (const [s] of ndSrcs) {
                         const subW = fullW * (lnkContrib.get(s) ?? 0);
                         const cur  = inCursor.get(s) ?? 0;
                         tgtPos.set(`${key}\x00${s}`, {top: cur, bot: cur + subW});
                         inCursor.set(s, cur + subW);
                     }
                 }
+
+                // ── Right side: source-side positions of outgoing links ────────
+                // Band heights use ndDrawFrac (draw-width-based) so the outgoing
+                // source bands match the incoming bands computed above.  This
+                // makes the coloured bands continuous across each node and
+                // prevents subsequent sections from rendering as hairlines.
+                const outBandH = new Map<string, number>(ndSrcs.map(([s]) => [s, 0] as [string, number]));
+                for (const lnk of srcLinks) {
+                    const key2   = `${nd.name}\x00${(lnk.target as LayoutNode).name}`;
+                    const fullW2 = linkDrawW.get(key2) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+                    for (const [s] of ndSrcs) { outBandH.set(s, (outBandH.get(s) ?? 0) + fullW2 * (ndDrawFrac.get(s) ?? 0)); }
+                }
+                const outCursor = new Map<string, number>();
+                { let y = nd.y0 ?? 0;
+                  for (const [s] of ndSrcs) { outCursor.set(s, y); y += outBandH.get(s) ?? 0; } }
+
+                for (const lnk of srcLinks) {
+                    const key  = `${nd.name}\x00${(lnk.target as LayoutNode).name}`;
+                    const fullW = linkDrawW.get(key) ?? Math.max(minRibbonHeight, lnk.width ?? 1) * fitK;
+                    for (const [s] of ndSrcs) {
+                        const subW = fullW * (ndDrawFrac.get(s) ?? 0);
+                        const cur  = outCursor.get(s) ?? 0;
+                        srcPos.set(`${key}\x00${s}`, {top: cur, bot: cur + subW});
+                        outCursor.set(s, cur + subW);
+                    }
+                }
             }
 
-            // Build SubRibbon array from the position maps
+            // Build SubRibbon array from the position maps.
+            // Use draw-width fracs for the visibility filter so that a source
+            // with a tiny value contribution but an inflated draw width still
+            // gets a correctly-sized ribbon rather than being silently dropped.
             for (const lnk of graph.links as LayoutLink[]) {
-                const srcNd = lnk.source as LayoutNode;
-                const tgtNd = lnk.target as LayoutNode;
-                const key   = `${srcNd.name}\x00${tgtNd.name}`;
-                const srcs  = [...(nodeContrib.get(srcNd.name) ?? new Map<string, number>()).entries()]
+                const srcNd     = lnk.source as LayoutNode;
+                const tgtNd     = lnk.target as LayoutNode;
+                const key       = `${srcNd.name}\x00${tgtNd.name}`;
+                const drawFracs = nodeDrawFrac.get(srcNd.name);
+                const srcs      = [...(nodeContrib.get(srcNd.name) ?? new Map<string, number>()).entries()]
                     .sort((a, b) => (depth0Order.get(a[0]) ?? 0) - (depth0Order.get(b[0]) ?? 0));
-                for (const [s, frac] of srcs) {
-                    if (frac < 0.0001) continue;
+                for (const [s, valueFrac] of srcs) {
+                    const drawF = drawFracs?.get(s) ?? valueFrac;
+                    if (drawF < 0.0001) continue;
                     const sp = srcPos.get(`${key}\x00${s}`);
                     const tp = tgtPos.get(`${key}\x00${s}`);
                     if (!sp || !tp) continue;
@@ -894,7 +961,7 @@ export class Visual implements IVisual {
 
         linkPaths
             .append("title")
-            .text(d => `${(d.link.source as LayoutNode).label} \u2192 ${(d.link.target as LayoutNode).label}\n${d.link.value.toLocaleString()}`);
+            .text(d => `${(d.link.source as LayoutNode).label} \u2192 ${(d.link.target as LayoutNode).label}\n${fmtVal(d.link.value)}`);
 
         linkPaths.on("click", (event: MouseEvent, d: SubRibbon) => {
             const lk = `${(d.link.source as LayoutNode).name}\x00${(d.link.target as LayoutNode).name}`;
@@ -935,7 +1002,7 @@ export class Visual implements IVisual {
             .attr("stroke-width", 0.5)
             .attr("opacity", nodeOpacity)
             .append("title")
-            .text(d => `${d.label}\n${(d.value ?? 0).toLocaleString()}`);
+            .text(d => `${d.label}\n${fmtVal(d.value ?? 0)}`);
 
         nodeGroups.on("click", (event: MouseEvent, d: LayoutNode) => {
             if (this.selectionType === "node" && this.selectedKey === d.name) {
@@ -1231,7 +1298,7 @@ export class Visual implements IVisual {
                 .attr("font-style",      vItalic   ? "italic"    : "normal")
                 .attr("text-decoration", vUnderline ? "underline" : "none")
                 .attr("fill",            vFontColor)
-                .text(d => (d.value ?? 0).toLocaleString());
+                .text(d => fmtVal(d.value ?? 0));
 
             if (valueBgActive) {
                 valueGs.each(function () {
@@ -1279,7 +1346,7 @@ export class Visual implements IVisual {
                 .attr("font-style",      vItalic   ? "italic"    : "normal")
                 .attr("text-decoration", vUnderline ? "underline" : "none")
                 .attr("fill",            vFontColor)
-                .text((d: LayoutLink) => d.value.toLocaleString());
+                .text((d: LayoutLink) => fmtVal(d.value));
 
             if (valueBgActive) {
                 ribbonValueGs.each(function () {

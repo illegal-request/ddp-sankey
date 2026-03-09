@@ -155,6 +155,22 @@
             ]
           }
         },
+        "displayUnits": {
+          "displayName": "Display Units",
+          "type": {
+            "enumeration": [
+              { "displayName": "Auto",      "value": "auto"      },
+              { "displayName": "None",      "value": "none"      },
+              { "displayName": "Thousands", "value": "thousands" },
+              { "displayName": "Millions",  "value": "millions"  },
+              { "displayName": "Billions",  "value": "billions"  }
+            ]
+          }
+        },
+        "decimalPlaces": {
+          "displayName": "Decimal Places",
+          "type": { "numeric": true }
+        },
         "fontFamily": {
           "displayName": "Font Family",
           "type": { "text": true }

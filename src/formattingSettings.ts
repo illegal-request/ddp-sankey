@@ -161,6 +161,14 @@ const positionItems = [
     { displayName: "Auto",    value: "auto"    }
 ];
 
+const displayUnitsItems = [
+    { displayName: "Auto",      value: "auto"      },
+    { displayName: "None",      value: "none"      },
+    { displayName: "Thousands", value: "thousands" },
+    { displayName: "Millions",  value: "millions"  },
+    { displayName: "Billions",  value: "billions"  }
+];
+
 const alignmentItems = [
     { displayName: "Left",   value: "left"   },
     { displayName: "Center", value: "center" },
@@ -202,6 +210,25 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
         description: "Horizontal alignment of value labels on ribbons — Left anchors near the source node, Center places them mid-span, Right anchors near the target node",
         items: alignmentItems,
         value: alignmentItems[1]   // default: Center
+    });
+
+    public displayUnits = new formattingSettings.ItemDropdown({
+        name: "displayUnits",
+        displayName: "Display Units",
+        description: "Scale values for readability — Auto picks the best unit based on the largest value in the data",
+        items: displayUnitsItems,
+        value: displayUnitsItems[0]   // default: Auto
+    });
+
+    public decimalPlaces = new formattingSettings.NumUpDown({
+        name: "decimalPlaces",
+        displayName: "Decimal Places",
+        description: "Number of digits after the decimal point",
+        value: 0,
+        options: {
+            minValue: { type: ValidatorType.Min, value: 0  },
+            maxValue: { type: ValidatorType.Max, value: 10 }
+        }
     });
 
     public fontControl = new formattingSettings.FontControl({
@@ -264,7 +291,7 @@ class ValueSettingsCard extends formattingSettings.SimpleCard {
     });
 
     public topLevelSlice = this.show;
-    public slices = [this.target, this.position, this.alignment, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
+    public slices = [this.target, this.position, this.alignment, this.displayUnits, this.decimalPlaces, this.fontControl, this.fontColor, this.showBackground, this.backgroundColor, this.backgroundTransparency];
 }
 
 // ─── Root model ───────────────────────────────────────────────────────────────
