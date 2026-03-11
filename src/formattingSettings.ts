@@ -107,7 +107,14 @@ class LinkSettingsCard extends formattingSettings.SimpleCard {
         value: false
     });
 
-    public slices = [this.linkOpacity, this.minFlowValue, this.colorBySource, this.colorSourceLevel, this.gradientFlows];
+    public skipBlanks = new formattingSettings.ToggleSwitch({
+        name: "skipBlanks",
+        displayName: "Hide Blank Nodes",
+        description: "Skip any flow whose source or target level is blank — useful when later columns only provide partial breakdowns",
+        value: false
+    });
+
+    public slices = [this.linkOpacity, this.minFlowValue, this.colorBySource, this.colorSourceLevel, this.gradientFlows, this.skipBlanks];
 }
 
 // ─── Labels card ──────────────────────────────────────────────────────────────

@@ -457,6 +457,7 @@ export class Visual implements IVisual {
         const minFlowValue   = Math.max(0, linkSettings.minFlowValue.value ?? 0);
         const colorBySource  = linkSettings.colorBySource.value;
         const gradientFlows  = linkSettings.gradientFlows.value ?? false;
+        const skipBlanks     = linkSettings.skipBlanks.value ?? false;
 
         const showLabels  = labelSettings.show.value;
         const fontFamily  = labelSettings.fontControl.fontFamily.value;
@@ -579,6 +580,8 @@ export class Visual implements IVisual {
             for (let i = 0; i < levelCats.length - 1; i++) {
                 // Skip degenerate links where the same non-blank label appears at consecutive levels
                 if (levelRaws[i] !== null && levelRaws[i] === levelRaws[i + 1]) continue;
+                // Skip flows involving blank nodes when Hide Blank Nodes is on
+                if (skipBlanks && (levelRaws[i] === null || levelRaws[i + 1] === null)) continue;
 
                 const srcKey = levelKeys[i];
                 const tgtKey = levelKeys[i + 1];

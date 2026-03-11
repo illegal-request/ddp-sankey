@@ -12,6 +12,16 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.35-beta.1] — 2026-03-10
+
+### Added
+- **Hide Blank Nodes** toggle (Flows card) — when on, any flow whose source or
+  target level is blank is excluded from the diagram.  Earlier non-blank flows
+  in the same row are still drawn, so partial breakdowns in later columns are
+  simply omitted rather than collapsing all upstream flows with them.
+
+---
+
 ## [1.2.34-beta.1] — 2026-03-10
 
 ### Added

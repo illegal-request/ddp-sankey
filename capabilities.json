@@ -95,6 +95,10 @@
         "gradientFlows": {
           "displayName": "Gradient Flows",
           "type": { "bool": true }
+        },
+        "skipBlanks": {
+          "displayName": "Hide Blank Nodes",
+          "type": { "bool": true }
         }
       }
     },
