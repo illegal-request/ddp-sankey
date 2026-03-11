@@ -258,6 +258,7 @@
     }
   },
   "privileges": [],
+  "supportsLandingPage": true,
   "supportsHighlight": false,
   "supportsMultiVisualSelection": true,
   "sorting": {

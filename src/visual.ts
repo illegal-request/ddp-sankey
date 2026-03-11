@@ -291,6 +291,7 @@ export class Visual implements IVisual {
     private zoomLayer:   Selection<SVGGElement,    unknown, null, undefined>;
     private container:   Selection<SVGGElement,    unknown, null, undefined>;
     private errorText:   Selection<SVGTextElement, unknown, null, undefined>;
+    private landingLayer: Selection<SVGGElement, unknown, null, undefined>;
     private zoomBehavior: ZoomBehavior<SVGSVGElement, unknown>;
 
     private formattingSettingsService: FormattingSettingsService;
@@ -343,6 +344,10 @@ export class Visual implements IVisual {
             .attr("fill",       "#999")
             .attr("font-size",  "14px")
             .attr("font-family", "sans-serif");
+
+        this.landingLayer = this.svg
+            .append<SVGGElement>("g")
+            .classed("landingLayer", true);
 
         // Zoom: scroll to zoom, drag to pan, double-click to reset
         this.zoomBehavior = zoom<SVGSVGElement, unknown>()
@@ -397,6 +402,7 @@ export class Visual implements IVisual {
         this.svg.attr("width", width).attr("height", height);
         this.container.selectAll("*").remove();
         this.errorText.text("");
+        this.landingLayer.selectAll("*").remove();
 
         // ── Populate formatting settings from the format pane ──────────────────
         this.formattingSettings = this.formattingSettingsService
@@ -497,8 +503,14 @@ export class Visual implements IVisual {
         const dataView    = options.dataViews?.[0];
         const categorical = dataView?.categorical;
 
-        if (!categorical?.categories?.length || !categorical.values?.length) {
-            this.showError(width, height, "Add 2 or more Path Level columns and a Value to get started.");
+        // No Path Levels mapped at all — show landing page
+        if (!categorical?.categories?.length) {
+            this.showLandingPage(width, height);
+            return;
+        }
+        // Path Levels present but no Value measure yet — show inline guidance
+        if (!categorical.values?.length) {
+            this.showError(width, height, "Add a Value field to show flows.");
             return;
         }
 
@@ -1158,9 +1170,28 @@ export class Visual implements IVisual {
             .attr("opacity", d => linkOpacityFn(d))
             .style("cursor", "pointer");
 
-        linkPaths
-            .append("title")
-            .text(d => `${(d.link.source as LayoutNode).label} \u2192 ${(d.link.target as LayoutNode).label}\n${fmtLabel(d.link.value)}`);
+        linkPaths.on("mouseenter", (event: MouseEvent, d: SubRibbon) => {
+            const srcNd = d.link.source as LayoutNode;
+            const tgtNd = d.link.target as LayoutNode;
+            const lk    = `${srcNd.name}\x00${tgtNd.name}`;
+            this.host.tooltipService.show({
+                dataItems: [{
+                    header:      `${srcNd.label} \u2192 ${tgtNd.label}`,
+                    displayName: "Value",
+                    value:       fmtLabel(d.link.value),
+                    color:       ribbonColor(d)
+                }],
+                identities:  linkSelIds.get(lk) ?? [],
+                coordinates: [event.clientX, event.clientY],
+                isTouchEvent: false
+            });
+        });
+        linkPaths.on("mousemove", (event: MouseEvent) => {
+            this.host.tooltipService.move({ coordinates: [event.clientX, event.clientY], isTouchEvent: false, identities: [] });
+        });
+        linkPaths.on("mouseleave", () => {
+            this.host.tooltipService.hide({ immediately: false, isTouchEvent: false });
+        });
 
         linkPaths.on("click", (event: MouseEvent, d: SubRibbon) => {
             const lk = `${(d.link.source as LayoutNode).name}\x00${(d.link.target as LayoutNode).name}`;
@@ -1210,9 +1241,7 @@ export class Visual implements IVisual {
             .attr("fill",   d => color(d.label))
             .attr("stroke", "#333")
             .attr("stroke-width", 0.5)
-            .attr("opacity", nodeOpacity)
-            .append("title")
-            .text(d => `${d.label}\n${fmtLabel(d.value ?? 0)}`);
+            .attr("opacity", nodeOpacity);
 
         nodeGroups.on("click", (event: MouseEvent, d: LayoutNode) => {
             if (this.selectionType === "node" && this.selectedKey === d.name) {
@@ -1239,6 +1268,26 @@ export class Visual implements IVisual {
                 ids[0] ?? {} as powerbi.extensibility.ISelectionId,
                 { x: event.clientX, y: event.clientY }
             );
+        });
+
+        nodeGroups.on("mouseenter", (event: MouseEvent, d: LayoutNode) => {
+            this.host.tooltipService.show({
+                dataItems: [{
+                    header:      d.label,
+                    displayName: "Value",
+                    value:       fmtLabel(d.value ?? 0),
+                    color:       color(d.label)
+                }],
+                identities:  nodeSelIds.get(d.name) ?? [],
+                coordinates: [event.clientX, event.clientY],
+                isTouchEvent: false
+            });
+        });
+        nodeGroups.on("mousemove", (event: MouseEvent) => {
+            this.host.tooltipService.move({ coordinates: [event.clientX, event.clientY], isTouchEvent: false, identities: [] });
+        });
+        nodeGroups.on("mouseleave", () => {
+            this.host.tooltipService.hide({ immediately: false, isTouchEvent: false });
         });
 
         // ── Name labels ───────────────────────────────────────────────────────
@@ -1609,6 +1658,66 @@ export class Visual implements IVisual {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private showLandingPage(width: number, height: number): void {
+        const cx = width  / 2;
+        const cy = height / 2;
+
+        // ── Mini Sankey illustration ───────────────────────────────────────────
+        const nW  = 10;
+        const lX  = cx - 55,  lX1 = lX + nW;   // left column
+        const rX  = cx + 45,  rX0 = rX;          // right column
+        const mx  = (lX1 + rX0) / 2;             // bezier midpoint (= cx)
+
+        // Left nodes
+        const tl0 = cy - 52,  tl1 = tl0 + 30;   // top-left  (blue,   h=30)
+        const bl0 = tl1  + 8, bl1 = bl0 + 20;   // bottom-left (orange, h=20)
+        // Right node spans the full height of both left nodes + gap (= 58 px)
+        const rr0 = cy - 52,  rr1 = rr0 + 58;
+        // Ribbon split on right — proportional to left heights (30 of 50 → 35 of 58)
+        const r1rbot = rr0 + 35;
+
+        // Ribbon 1 (blue)
+        this.landingLayer.append("path")
+            .attr("d",
+                `M${lX1},${tl0} C${mx},${tl0} ${mx},${rr0} ${rX0},${rr0}` +
+                ` L${rX0},${r1rbot} C${mx},${r1rbot} ${mx},${tl1} ${lX1},${tl1} Z`)
+            .attr("fill", "rgba(68,114,196,0.30)");
+
+        // Ribbon 2 (orange)
+        this.landingLayer.append("path")
+            .attr("d",
+                `M${lX1},${bl0} C${mx},${bl0} ${mx},${r1rbot} ${rX0},${r1rbot}` +
+                ` L${rX0},${rr1} C${mx},${rr1} ${mx},${bl1} ${lX1},${bl1} Z`)
+            .attr("fill", "rgba(237,125,49,0.30)");
+
+        // Node rects (on top of ribbons)
+        this.landingLayer.append("rect")
+            .attr("x", lX).attr("y", tl0).attr("width", nW).attr("height", tl1 - tl0)
+            .attr("fill", "#4472C4").attr("rx", 2);
+        this.landingLayer.append("rect")
+            .attr("x", lX).attr("y", bl0).attr("width", nW).attr("height", bl1 - bl0)
+            .attr("fill", "#ED7D31").attr("rx", 2);
+        this.landingLayer.append("rect")
+            .attr("x", rX).attr("y", rr0).attr("width", nW).attr("height", rr1 - rr0)
+            .attr("fill", "#A5A5A5").attr("rx", 2);
+
+        // ── Title ─────────────────────────────────────────────────────────────
+        this.landingLayer.append("text")
+            .attr("x", cx).attr("y", cy + 20)
+            .attr("text-anchor", "middle")
+            .attr("font-family", "Segoe UI, sans-serif")
+            .attr("font-size", "15px").attr("font-weight", "600").attr("fill", "#555")
+            .text("Sankey Visual");
+
+        // ── Instructions ──────────────────────────────────────────────────────
+        this.landingLayer.append("text")
+            .attr("x", cx).attr("y", cy + 40)
+            .attr("text-anchor", "middle")
+            .attr("font-family", "Segoe UI, sans-serif")
+            .attr("font-size", "12px").attr("fill", "#999")
+            .text("Add 2+ Path Level columns and a Value field to visualize flows.");
+    }
 
     private showError(width: number, height: number, message: string): void {
         this.errorText

@@ -28,6 +28,8 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 | **Context menu** | Right-click any node, flow, or the empty canvas to open the Power BI context menu (drill-through, spotlight, etc.) |
 | **Highlight Direction** | Choose Downstream, Upstream, or Both when selecting nodes/flows |
 | **% of Total labels** | Data labels can show raw value, percentage of grand total, or both |
+| **Landing Page** | Friendly mini-diagram and instructions shown when no data fields are mapped |
+| **Native Tooltips** | Hover tooltips use the Power BI Tooltip API — supports report-page tooltips |
 
 ---
 
@@ -89,7 +91,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\DDP_Sankey_1.2.33.0.pbiviz` (filename always matches the current version)
+Output: `dist\DDP_Sankey_1.2.34.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 

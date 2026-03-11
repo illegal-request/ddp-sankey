@@ -12,6 +12,20 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.34-beta.1] — 2026-03-10
+
+### Added
+- **Landing Page** — when no Path Level columns are mapped, the visual now shows a
+  friendly mini Sankey illustration with setup instructions instead of a blank or
+  generic error state.  Enabled via `supportsLandingPage: true` in capabilities.
+- **Native Tooltips** — nodes and flows now use the Power BI Tooltip API
+  (`host.tooltipService`) instead of plain SVG `<title>` elements.  Hovering over
+  a node shows its name and formatted value; hovering over a flow shows source,
+  target, and value.  This enables report-page tooltips and drillthrough from
+  tooltips in future.
+
+---
+
 ## [1.2.33-beta.1] — 2026-03-10
 
 ### Added
