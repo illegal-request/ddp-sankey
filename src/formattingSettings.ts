@@ -110,7 +110,7 @@ class LinkSettingsCard extends formattingSettings.SimpleCard {
     public skipBlanks = new formattingSettings.ToggleSwitch({
         name: "skipBlanks",
         displayName: "Hide Blank Nodes",
-        description: "Skip any flow whose source or target level is blank — useful when later columns only provide partial breakdowns",
+        description: "Stop a flow path once it reaches a blank node with no further real values ahead — useful when later columns only partially break down the data",
         value: false
     });
 

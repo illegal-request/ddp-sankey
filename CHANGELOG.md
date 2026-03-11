@@ -12,6 +12,16 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.36-beta.1] — 2026-03-10
+
+### Fixed
+- **Hide Blank Nodes** — corrected the stop-flow logic.  A flow now continues
+  through a blank node as long as any later level in that row has a real value
+  (e.g. A → B(blank) → C(value) is fully drawn).  It only stops at a blank node
+  when every subsequent level in the same row is also blank.
+
+---
+
 ## [1.2.35-beta.1] — 2026-03-10
 
 ### Added

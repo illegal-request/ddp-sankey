@@ -580,8 +580,12 @@ export class Visual implements IVisual {
             for (let i = 0; i < levelCats.length - 1; i++) {
                 // Skip degenerate links where the same non-blank label appears at consecutive levels
                 if (levelRaws[i] !== null && levelRaws[i] === levelRaws[i + 1]) continue;
-                // Skip flows involving blank nodes when Hide Blank Nodes is on
-                if (skipBlanks && (levelRaws[i] === null || levelRaws[i + 1] === null)) continue;
+                // Hide Blank Nodes: skip a link whose source is blank only when
+                // every remaining level in this row is also blank (the flow has
+                // "tailed off" with no real value ahead).  If any later level has
+                // a real value the whole chain is preserved so the flow can reach it.
+                if (skipBlanks && levelRaws[i] === null &&
+                    !levelRaws.slice(i + 1).some(r => r !== null)) continue;
 
                 const srcKey = levelKeys[i];
                 const tgtKey = levelKeys[i + 1];
