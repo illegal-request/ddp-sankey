@@ -30,16 +30,30 @@
       ],
       "categorical": {
         "categories": {
-          "select": [
-            { "for": { "in": "pathLevels" } },
-            { "bind": { "to": "legendField" } }
-          ],
+          "select": [{ "for": { "in": "pathLevels" } }],
           "dataReductionAlgorithm": { "window": { "count": 10000 } }
         },
         "values": {
           "select": [
             { "bind": { "to": "value" } }
           ]
+        }
+      }
+    },
+    {
+      "conditions": [
+        {
+          "pathLevels": { "min": 1 },
+          "legendField": { "min": 1, "max": 1 }
+        }
+      ],
+      "categorical": {
+        "categories": {
+          "select": [
+            { "for": { "in": "pathLevels" } },
+            { "bind": { "to": "legendField" } }
+          ],
+          "dataReductionAlgorithm": { "window": { "count": 10000 } }
         }
       }
     }
