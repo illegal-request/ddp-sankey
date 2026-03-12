@@ -12,6 +12,17 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.41-beta.1] — 2026-03-12
+
+### Fixed
+- **Hide Blank Nodes** — definitive column-placement fix: added `enforceNodeColumns`
+  post-layout pass that reads the level index directly from each node's key and
+  forces `x0`, `x1`, `layer`, `depth`, and `height` to match.  d3-sankey's alignment
+  heuristics (including `sankeyLeft`) cannot guarantee correct placement when paths
+  have unequal lengths; this override removes that dependency entirely.
+
+---
+
 ## [1.2.40-beta.1] — 2026-03-11
 
 ### Fixed

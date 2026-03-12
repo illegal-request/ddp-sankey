@@ -104,6 +104,39 @@ function formatDataValue(v: number, unit: string, decimals: number): string {
     }
 }
 
+/**
+ * Post-layout fixup: force every node's horizontal column to its path-level
+ * index, which is encoded as the numeric prefix in the node key ("${lvl}\x01…").
+ *
+ * d3-sankey's alignment heuristics (including sankeyLeft) can still misplace
+ * terminal nodes when paths have unequal lengths, because the relaxation solver
+ * and column-count calculation depend on graph-theoretic depth rather than the
+ * explicit level encoding in the key.  By overriding x0/x1 after the layout we
+ * guarantee correct horizontal placement regardless of graph topology.
+ *
+ * d3-sankey still handles all vertical (y) positioning; only x values change.
+ */
+function enforceNodeColumns(
+    graph:     LayoutGraph,
+    numCols:   number,
+    nodeWidth: number,
+    innerW:    number
+): void {
+    if (numCols < 2) return;
+    const kx = (innerW - nodeWidth) / (numCols - 1);
+    for (const nd of graph.nodes) {
+        const node = nd as LayoutNode;
+        const sep  = node.name.indexOf("\x01");
+        if (sep < 0) continue;
+        const lvl = parseInt(node.name.slice(0, sep), 10);
+        if (isNaN(lvl) || lvl < 0 || lvl >= numCols) continue;
+        node.x0     = lvl * kx;
+        node.x1     = node.x0 + nodeWidth;
+        node.depth  = lvl;
+        node.height = numCols - 1 - lvl;
+    }
+}
+
 /** Cubic-bezier ribbon path for one SubRibbon (top + bottom edges). */
 function subRibbonPath(d: SubRibbon): string {
     const cx = (d.srcX1 + d.tgtX0) / 2;
@@ -702,6 +735,10 @@ export class Visual implements IVisual {
             this.showError(width, height, "Could not compute layout. Check for circular references.");
             return;
         }
+        // Guarantee correct column placement by overriding x0/x1 based on the
+        // level index encoded in each node key — d3-sankey alignment heuristics
+        // can misplace terminal nodes when paths have unequal lengths.
+        enforceNodeColumns(graph, levelCats.length, nodeWidth, innerW);
 
         // ── Value formatter ───────────────────────────────────────────────────
         // Resolve "auto" unit once using the full set of node values, then build
@@ -759,6 +796,7 @@ export class Visual implements IVisual {
                 this.showError(width, height, "Could not compute layout. Check for circular references.");
                 return;
             }
+            enforceNodeColumns(graph, levelCats.length, effectiveNodeWidth, innerW);
         }
 
         // ── Re-stack ribbons to honour minRibbonHeight ────────────────────────
