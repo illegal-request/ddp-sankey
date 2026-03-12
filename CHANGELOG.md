@@ -12,6 +12,15 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.39-beta.1] — 2026-03-11
+
+### Fixed
+- **Hide Blank Nodes** — correct implementation: any link where either the source
+  or target level is blank is now skipped entirely.  No blank node is ever drawn;
+  flows terminate cleanly at the last real node in the row.
+
+---
+
 ## [1.2.38-beta.1] — 2026-03-11
 
 ### Fixed

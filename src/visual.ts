@@ -580,12 +580,10 @@ export class Visual implements IVisual {
             for (let i = 0; i < levelCats.length - 1; i++) {
                 // Skip degenerate links where the same non-blank label appears at consecutive levels
                 if (levelRaws[i] !== null && levelRaws[i] === levelRaws[i + 1]) continue;
-                // Hide Blank Nodes: skip any link whose TARGET is blank unless a
-                // real value appears further ahead in this row (the blank is a
-                // gap, not a termination point).  Flows terminate at the last
-                // real node — blank nodes are never drawn as endpoints.
-                if (skipBlanks && levelRaws[i + 1] === null &&
-                    !levelRaws.slice(i + 2).some(r => r !== null)) continue;
+                // Hide Blank Nodes: skip any link where either endpoint is blank.
+                // This means no blank node is ever drawn — flows terminate cleanly
+                // at the last real node in the row.
+                if (skipBlanks && (levelRaws[i] === null || levelRaws[i + 1] === null)) continue;
 
                 const srcKey = levelKeys[i];
                 const tgtKey = levelKeys[i + 1];
