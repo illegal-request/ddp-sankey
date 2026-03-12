@@ -12,17 +12,55 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.44.0] — 2026-03-12
+
+### Fixed
+- **Isolated source nodes** (definitive fix) — level-0 nodes that have data but
+  no downstream flows (e.g. "Discontinued" products) now reliably appear as
+  correctly-sized bars in column 0 when Hide Blank Nodes is on.
+
+  Two earlier attempts both failed:
+  - v1.2.42 used `fixedValue` alone with no links. d3-sankey's breadth solver is
+    topology-driven; a zero-link node gets `y0 = y1 = 0` regardless of `fixedValue`.
+  - v1.2.43 bypassed d3-sankey and manually injected nodes into `graph.nodes`
+    after the fit-to-viewport pass. After fitting, existing nodes already fill
+    `innerH`; injected nodes landed below the visible area.
+
+  The working approach passes each isolated node to d3-sankey with two mechanisms:
+  1. `fixedValue = accumulated value` — d3-sankey sizes the bar from the real row
+     total rather than an empty link sum.
+  2. A phantom link (value = 0.001) to a shared `__phantom_sink__` dummy node —
+     gives d3-sankey enough graph topology to place the node in column 0 alongside
+     other level-0 nodes and distribute it vertically with the normal proportional
+     algorithm.
+  The phantom sink and its links are stripped from the graph in-place immediately
+  after layout (before `reStackRibbons`) and are never rendered.  The ε link value
+  means the phantom sink occupies negligible space in its column.  Selection,
+  cross-filtering, and tooltips on isolated nodes work as normal.
+
+---
+
+## [1.2.43.0] — 2026-03-12
+
+### Fixed
+- **Isolated source nodes** (intermediate attempt, superseded by v1.2.44) —
+  removed isolated nodes from the d3-sankey input entirely and injected them
+  into `graph.nodes` after the fit-to-viewport pass with manually computed
+  y-coordinates.  Correctly avoids the zero-link sizing problem but places nodes
+  below the last column-0 node; after fit-to-viewport the layout already fills
+  `innerH`, so injected nodes land outside the visible area.
+
+---
+
 ## [1.2.42-beta.1] — 2026-03-12
 
 ### Added
-- **Isolated source nodes** — when Hide Blank Nodes is on, level-0 nodes whose
-  entire downstream is blank now appear as visible bars in the first column with
-  no outgoing flows.  Previously these nodes were silently dropped from the chart
-  because the link-skipping logic never added them to the node set.  The bar is
-  sized from the accumulated row value (`fixedValue`) so it scales correctly
-  relative to all other column-0 nodes.  Selection / cross-filtering works as
-  normal.  Typical use case: a category of items (e.g. "Discontinued") that
-  exists in the data but has no downstream actions.
+- **Isolated source nodes** (first attempt, superseded by v1.2.44) — introduced
+  the `isolatedNodeValues` scan and `fixedValue` mechanism.  Isolated nodes were
+  added to the d3-sankey graph with `fixedValue` set to their accumulated value
+  but with no outgoing links.  d3-sankey's breadth solver is topology-driven and
+  ignores `fixedValue` for vertical placement, so these nodes collapsed to zero
+  height and were not visible.
 
 ---
 
