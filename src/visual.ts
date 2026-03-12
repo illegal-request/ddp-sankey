@@ -550,8 +550,13 @@ export class Visual implements IVisual {
             return;
         }
 
-        // categorical.categories is ordered by field-well position (top → left in visual)
-        const levelCats = categorical.categories;
+        // Split categorical.categories by data role.
+        // pathLevels columns drive the hierarchy; legendField (optional, max 1) provides
+        // cross-visual color coordination when the same field is used as a Legend in
+        // a co-located native chart.
+        const levelCats = categorical.categories.filter(c => c.source.roles?.["pathLevels"]);
+        const legendCat = categorical.categories.find(c => c.source.roles?.["legendField"]) ?? null;
+
         if (levelCats.length < 2) {
             this.showError(width, height, "Add at least 2 Path Level columns and a Value.");
             return;
@@ -584,6 +589,41 @@ export class Visual implements IVisual {
         const nodeSelIds = new Map<string, powerbi.visuals.ISelectionId[]>();
         const linkSelIds = new Map<string, powerbi.visuals.ISelectionId[]>();
         const rowCount   = levelCats[0].values.length;
+
+        // ── Legend color map ──────────────────────────────────────────────────
+        // When a Color Legend field is mapped, build a map from level-0 label
+        // → palette color so that level-0 nodes (and any flows they colour)
+        // match the colors assigned to the same field in a co-located native
+        // visual (e.g. a Pie chart with the same Legend field).
+        //
+        // Power BI's colorPalette.getColor() is report-level: the same string
+        // key always returns the same color within a report session, and native
+        // visuals register legend values in first-appearance (row) order.  By
+        // pre-registering legend values here in the same order before making
+        // any other getColor() calls, we ensure the palette assignments align
+        // with those produced by the native visual.
+        const legendColorMap = new Map<string, string>();  // level-0 label → hex color
+        if (legendCat) {
+            // Pass 1: collect unique legend values in first-appearance order.
+            const legendOrder: string[] = [];
+            const legendSeen  = new Set<string>();
+            for (let r = 0; r < rowCount; r++) {
+                const lgv = String(legendCat.values[r] ?? "").trim();
+                if (lgv && !legendSeen.has(lgv)) { legendOrder.push(lgv); legendSeen.add(lgv); }
+            }
+            // Pre-register in canonical order before any other getColor() calls.
+            for (const lgv of legendOrder) this.host.colorPalette.getColor(lgv);
+
+            // Pass 2: map each level-0 label to its legend value's color.
+            // First-seen mapping wins (one level-0 label → one legend value).
+            for (let r = 0; r < rowCount; r++) {
+                const lv0 = String(levelCats[0].values[r] ?? "").trim();
+                const lgv = String(legendCat.values[r] ?? "").trim();
+                if (lv0 && lgv && !legendColorMap.has(lv0)) {
+                    legendColorMap.set(lv0, this.host.colorPalette.getColor(lgv).value);
+                }
+            }
+        }
 
         for (let r = 0; r < rowCount; r++) {
             const val = Number(valueSeries.values[r]) || 0;
@@ -940,8 +980,11 @@ export class Visual implements IVisual {
             this.svg.call(this.zoomBehavior.transform, this.fitTransform);
         }
 
-        // Use report theme colours keyed by display label so the same name gets the same colour
-        const color = (label: string): string => this.host.colorPalette.getColor(label).value;
+        // Use report theme colours keyed by display label so the same name gets the same colour.
+        // When a Color Legend field is mapped, level-0 node labels are looked up in
+        // legendColorMap first so their colors match the co-located native visual.
+        const color = (label: string): string =>
+            legendColorMap.get(label) ?? this.host.colorPalette.getColor(label).value;
 
         // ── Selection highlight helpers ────────────────────────────────────────
         //

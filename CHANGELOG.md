@@ -12,6 +12,32 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.45.0] — 2026-03-12
+
+### Added
+- **Color Legend data role** — a new optional field well labelled "Color Legend" accepts
+  a single grouping column.  When mapped, the visual uses that column's values as the
+  color keys for level-0 nodes (and any flows they colour), instead of the level-0
+  field values themselves.
+
+  **Use case:** if a co-located Pie chart (or bar/line chart) uses the same column as
+  its Legend, dragging that same column into the Sankey's Color Legend well makes the
+  level-0 node colors match the chart's legend slice colors exactly — the same
+  cross-visual color consistency that native Power BI visuals achieve by sharing a
+  Legend field.
+
+  **Mechanism:** `colorPalette.getColor()` is report-level; the same string key always
+  returns the same color within a report session.  The visual pre-registers the legend
+  column's unique values with the palette in first-appearance (row) order — matching
+  the registration sequence used by native visuals — before making any other
+  `getColor()` calls.  A row-level map from level-0 label → legend color is then built
+  so that `color(label)` returns the legend-sourced color for every level-0 label.
+
+  All other behavior (Color by Source, Gradient Flows, default palette coloring for
+  deeper nodes) is unchanged.
+
+---
+
 ## [1.2.44.0] — 2026-03-12
 
 ### Fixed

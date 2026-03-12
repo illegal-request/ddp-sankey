@@ -17,6 +17,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 |---|---|
 | **Multi-level paths** | Drag any number of columns into Path Levels; each consecutive pair becomes a column of nodes |
 | **Theme-aware colours** | Nodes use `host.colorPalette` so they match your report's theme automatically |
+| **Color Legend field** | Drag the same field used as the Legend in a co-located chart into the Color Legend well — level-0 nodes (and their flows) adopt the matching colors, giving cross-visual color consistency identical to native Power BI visuals |
 | **Color by Source** | Optionally color every flow by the depth-0 node it originates from, making flows visually traceable across all columns |
 | **Blank value support** | Null / empty cells are shown as a `(Blank)` node rather than being silently dropped; each blank is unique to its parent path |
 | **Cross-filtering** | Click a node or flow to filter other visuals on the page; Ctrl/Cmd-click while another visual is already filtered to stack both filters simultaneously; click the background to clear |
@@ -82,6 +83,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 |---|---|---|
 | **Path Levels** | Grouping (multi-column) | Minimum 2 columns; order determines left→right layout |
 | **Value** | Measure | Flow weight / volume; rows with Value ≤ 0 are ignored |
+| **Color Legend** | Grouping (max 1 column) | Optional; drag the same field used as Legend in a co-located chart to synchronise level-0 node colors across visuals |
 
 ---
 
@@ -93,7 +95,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\DDP_Sankey_1.2.44.0.pbiviz` (filename always matches the current version)
+Output: `dist\DDP_Sankey_1.2.45.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 

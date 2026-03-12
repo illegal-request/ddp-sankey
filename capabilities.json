@@ -11,6 +11,12 @@
       "name": "value",
       "kind": "Measure",
       "description": "Flow weight or volume — drives ribbon width"
+    },
+    {
+      "displayName": "Color Legend",
+      "name": "legendField",
+      "kind": "Grouping",
+      "description": "Optional: drag the same field used as the Legend in a co-located chart here to match colors across visuals"
     }
   ],
   "dataViewMappings": [
@@ -18,12 +24,16 @@
       "conditions": [
         {
           "pathLevels": { "min": 1 },
-          "value": { "max": 1 }
+          "value": { "max": 1 },
+          "legendField": { "max": 1 }
         }
       ],
       "categorical": {
         "categories": {
-          "select": [{ "for": { "in": "pathLevels" } }],
+          "select": [
+            { "for": { "in": "pathLevels" } },
+            { "bind": { "to": "legendField" } }
+          ],
           "dataReductionAlgorithm": { "window": { "count": 10000 } }
         },
         "values": {
