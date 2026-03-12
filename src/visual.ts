@@ -25,8 +25,9 @@ import "./../style/visual.less";
 // ─── Data types ───────────────────────────────────────────────────────────────
 
 interface NodeDatum {
-    name:  string;   // level-prefixed key, e.g. "0\x01North"  (internal, unique across levels)
-    label: string;   // display name,        e.g. "North"
+    name:       string;           // level-prefixed key, e.g. "0\x01North"  (internal, unique across levels)
+    label:      string;           // display name,        e.g. "North"
+    fixedValue?: number;          // set for isolated source nodes (no outgoing links) so d3-sankey sizes them correctly
 }
 
 interface LinkDatum {
@@ -638,7 +639,36 @@ export class Visual implements IVisual {
             }
         }
 
-        if (linkMap.size === 0) {
+        // ── Isolated source nodes (skipBlanks) ────────────────────────────────
+        // When skipBlanks is on, rows where level 1 is blank produce no drawn
+        // links, so the level-0 source node is never added to nodeSet.  Such
+        // nodes represent real data with no downstream activity (e.g. products
+        // being discontinued).  Find them and add them as isolated nodes so they
+        // appear as visible bars in column 0 with no outgoing flows.
+        // fixedValue tells d3-sankey to size the bar from the accumulated row
+        // total rather than from (empty) link widths.
+        const isolatedNodeValues = new Map<string, number>();
+        if (skipBlanks) {
+            for (let r = 0; r < rowCount; r++) {
+                const val = Number(valueSeries.values[r]) || 0;
+                if (val <= 0 || val < minFlowValue) continue;
+                const raw0 = (String(levelCats[0].values[r] ?? "").trim()) || null;
+                if (raw0 === null) continue;
+                const key0 = `0\x01${raw0}`;
+                if (!nodeSet.has(key0)) {
+                    isolatedNodeValues.set(key0, (isolatedNodeValues.get(key0) ?? 0) + val);
+                    // Accumulate selection IDs so clicking the node still filters
+                    let idBuilder = this.host.createSelectionIdBuilder();
+                    for (const cat of levelCats) idBuilder = idBuilder.withCategory(cat, r);
+                    const selId = idBuilder.createSelectionId();
+                    if (!nodeSelIds.has(key0)) nodeSelIds.set(key0, []);
+                    nodeSelIds.get(key0)!.push(selId);
+                }
+            }
+            for (const key of isolatedNodeValues.keys()) nodeSet.add(key);
+        }
+
+        if (linkMap.size === 0 && isolatedNodeValues.size === 0) {
             this.showError(width, height, "No valid flows found. Ensure Value > 0 and consecutive levels differ.");
             return;
         }
@@ -651,10 +681,15 @@ export class Visual implements IVisual {
             const afterLevel = key.slice(key.indexOf("\x01") + 1);
             // Blank keys are suffixed with \x02parentKey for disambiguation — strip it
             const blankSep = afterLevel.indexOf("\x02");
-            return {
+            const datum: NodeDatum = {
                 name:  key,
                 label: blankSep === -1 ? afterLevel : afterLevel.slice(0, blankSep)
             };
+            // Isolated source nodes need fixedValue so d3-sankey sizes their bar
+            // from the accumulated row total rather than (empty) link widths.
+            const fv = isolatedNodeValues.get(key);
+            if (fv !== undefined) datum.fixedValue = fv;
+            return datum;
         });
 
         const links: LinkDatum[] = [];

@@ -12,6 +12,20 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.42-beta.1] — 2026-03-12
+
+### Added
+- **Isolated source nodes** — when Hide Blank Nodes is on, level-0 nodes whose
+  entire downstream is blank now appear as visible bars in the first column with
+  no outgoing flows.  Previously these nodes were silently dropped from the chart
+  because the link-skipping logic never added them to the node set.  The bar is
+  sized from the accumulated row value (`fixedValue`) so it scales correctly
+  relative to all other column-0 nodes.  Selection / cross-filtering works as
+  normal.  Typical use case: a category of items (e.g. "Discontinued") that
+  exists in the data but has no downstream actions.
+
+---
+
 ## [1.2.41-beta.1] — 2026-03-12
 
 ### Fixed
