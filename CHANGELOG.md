@@ -12,6 +12,26 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.47.0] — 2026-03-12
+
+### Added
+- **Node Sort: Minimize Crossings** — a new option in the Node Sort dropdown
+  (Nodes format card).  When selected, nodes within each column are ordered by
+  the y-position of their primary source (the parent contributing the highest
+  flow value), with value-desc as the tie-break within each sibling group.
+
+  This keeps child nodes that share the same parent vertically adjacent,
+  preventing the interleaving that the default d3-sankey relaxation can produce
+  when equally-sized nodes from different parents converge to similar y-positions.
+  The sort is re-evaluated on every relaxation iteration so it converges
+  naturally with the evolving layout.
+
+  Use this when flows from column 2 onward diverge further than expected.
+  It has no effect on column 0 (level-0 nodes have no incoming links and are
+  left in their relaxation-derived order).
+
+---
+
 ## [1.2.46.0] — 2026-03-12
 
 ### Changed

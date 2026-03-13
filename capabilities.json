@@ -60,10 +60,11 @@
           "displayName": "Node Sort",
           "type": {
             "enumeration": [
-              { "displayName": "Default",            "value": "default"    },
-              { "displayName": "Value (high → low)", "value": "value-desc" },
-              { "displayName": "Value (low → high)", "value": "value-asc"  },
-              { "displayName": "Alphabetical",       "value": "alpha"      }
+              { "displayName": "Default",            "value": "default"       },
+              { "displayName": "Value (high → low)", "value": "value-desc"    },
+              { "displayName": "Value (low → high)", "value": "value-asc"     },
+              { "displayName": "Alphabetical",       "value": "alpha"         },
+              { "displayName": "Minimize Crossings", "value": "min-crossings" }
             ]
           }
         },

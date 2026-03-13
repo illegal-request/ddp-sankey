@@ -482,10 +482,35 @@ export class Visual implements IVisual {
         const nodePadding = Math.max(2, nodeSettings.nodePadding.value);
         const nodeSortStr    = String(nodeSettings.nodeSort.value?.value    ?? "default");
         const highlightDirStr = String(nodeSettings.highlightDir.value?.value ?? "downstream");
+        // "Minimize Crossings" sort: within each column, order nodes by the y0 of their
+        // primary source (the source contributing the highest flow value).  This causes
+        // sibling nodes — children of the same parent — to be grouped together vertically
+        // during d3-sankey's relaxation, reducing the divergence the default algorithm
+        // can produce when equally-sized nodes from different parents become interleaved.
+        // Level-0 nodes (no incoming links) fall back to sorting by their own y0 so
+        // they are left in whatever order the relaxation has already established.
+        // The sort is re-evaluated each relaxation iteration so it converges with the
+        // evolving layout; value-desc is the tie-break within each sibling group.
+        const minCrossingsSort = (a: LayoutNode, b: LayoutNode): number => {
+            const srcY = (nd: LayoutNode): number => {
+                const tl = (nd.targetLinks ?? []) as LayoutLink[];
+                if (!tl.length) return nd.y0 ?? 0;
+                let bestVal = -1, bestY = 0;
+                for (const l of tl) {
+                    const v = l.value ?? 0;
+                    if (v > bestVal) { bestVal = v; bestY = (l.source as LayoutNode).y0 ?? 0; }
+                }
+                return bestY;
+            };
+            const dy = srcY(a) - srcY(b);
+            return Math.abs(dy) > 0.001 ? dy : (b.value ?? 0) - (a.value ?? 0);
+        };
+
         const nodeSortFn: ((a: LayoutNode, b: LayoutNode) => number) | undefined =
-            nodeSortStr === "value-desc" ? (a, b) => (b.value ?? 0) - (a.value ?? 0) :
-            nodeSortStr === "value-asc"  ? (a, b) => (a.value ?? 0) - (b.value ?? 0) :
-            nodeSortStr === "alpha"      ? (a, b) => a.label.localeCompare(b.label)   :
+            nodeSortStr === "value-desc"    ? (a, b) => (b.value ?? 0) - (a.value ?? 0) :
+            nodeSortStr === "value-asc"     ? (a, b) => (a.value ?? 0) - (b.value ?? 0) :
+            nodeSortStr === "alpha"         ? (a, b) => a.label.localeCompare(b.label)   :
+            nodeSortStr === "min-crossings" ? minCrossingsSort                            :
             undefined;
 
         const linkOpacity    = Math.min(1, Math.max(0, linkSettings.linkOpacity.value / 100));

@@ -40,7 +40,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 ### Nodes
 - **Node Width (px)** — width of each node rectangle (default 20)
 - **Node Padding (px)** — vertical gap between nodes in the same column (default 12)
-- **Node Sort** — vertical ordering within each column: `Default` (d3 natural order), `Value (high → low)`, `Value (low → high)`, or `Alphabetical`
+- **Node Sort** — vertical ordering within each column: `Default` (d3 natural order), `Value (high → low)`, `Value (low → high)`, `Alphabetical`, or `Minimize Crossings` (groups sibling nodes together by parent to reduce flow divergence)
 - **Highlight Direction** — which direction to emphasise on selection: `Downstream` (default), `Upstream`, or `Both`
 
 ### Flows
@@ -95,7 +95,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\DDP_Sankey_1.2.46.0.pbiviz` (filename always matches the current version)
+Output: `dist\DDP_Sankey_1.2.47.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 
