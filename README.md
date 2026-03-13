@@ -29,7 +29,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 | **Context menu** | Right-click any node, flow, or the empty canvas to open the Power BI context menu (drill-through, spotlight, etc.) |
 | **Highlight Direction** | Choose Downstream, Upstream, or Both when selecting nodes/flows |
 | **% of Total labels** | Data labels can show raw value, percentage of grand total, or both |
-| **Hide Blank Nodes** | Toggle to exclude flows to/from blank level values — flows terminate at the last real node in each row; level-0 nodes that have data but no downstream values are still drawn as visible bars |
+| **Hide Blank Nodes** | Toggle to hide blank values in the hierarchy — blank targets (level 1+) are suppressed and flows terminate at the last real node; blank level-0 values are always kept as a `(Blank)` node so the full dataset is accounted for; level-0 nodes with data but no downstream flows are drawn as visible bars |
 | **Landing Page** | Friendly mini-diagram and instructions shown when no data fields are mapped |
 | **Native Tooltips** | Hover tooltips use the Power BI Tooltip API — supports report-page tooltips |
 
@@ -49,7 +49,7 @@ Drag two or more columns into **Path Levels** and a numeric measure into **Value
 - **Color by Source** — toggle to color all flows by a selected column's nodes, making flows visually traceable across all stages
 - **Color Source Column** — dropdown (only active when Color by Source is on) populated with the actual field names from the Path Levels well; pick any column to use as the color anchor
 - **Gradient Flows** — fades each ribbon from its source node color to its target node color (compatible with Color by Source)
-- **Hide Blank Nodes** — when on, any flow whose source or target level is blank is excluded; earlier non-blank flows in the same row are still shown
+- **Hide Blank Nodes** — when on, blank targets (level 1 and deeper) are excluded and flows terminate at the last real node; blank level-0 values are kept as a `(Blank)` node so every row in the dataset is accounted for in the totals
 
 ### Labels
 - **Show Labels** — toggle node name labels on/off
@@ -95,7 +95,7 @@ Node.js is required. npm is not in the default shell PATH on the build machine, 
 powershell.exe -ExecutionPolicy Bypass -File "build.ps1"
 ```
 
-Output: `dist\DDP_Sankey_1.2.45.0.pbiviz` (filename always matches the current version)
+Output: `dist\DDP_Sankey_1.2.46.0.pbiviz` (filename always matches the current version)
 
 Install the `.pbiviz` in Power BI Desktop via **Home → Import a visual from a file**.
 

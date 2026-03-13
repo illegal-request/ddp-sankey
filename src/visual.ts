@@ -655,10 +655,15 @@ export class Visual implements IVisual {
             for (let i = 0; i < levelCats.length - 1; i++) {
                 // Skip degenerate links where the same non-blank label appears at consecutive levels
                 if (levelRaws[i] !== null && levelRaws[i] === levelRaws[i + 1]) continue;
-                // Hide Blank Nodes: skip any link where either endpoint is blank.
-                // This means no blank node is ever drawn — flows terminate cleanly
-                // at the last real node in the row.
-                if (skipBlanks && (levelRaws[i] === null || levelRaws[i + 1] === null)) continue;
+                // Hide Blank Nodes: always skip a link when the TARGET is blank
+                // (flows never lead into a blank node at level 1+), but allow a
+                // blank SOURCE at level 0 so that all data is represented.
+                // Level-0 blanks appear as a single "(Blank)" node in column 0
+                // with their flows to non-blank column-1 nodes intact, ensuring
+                // the dataset is fully accounted for.  A blank SOURCE beyond
+                // level 0 is also skipped — those flows have already terminated
+                // at a real node in the preceding column.
+                if (skipBlanks && (levelRaws[i + 1] === null || (i > 0 && levelRaws[i] === null))) continue;
 
                 const srcKey = levelKeys[i];
                 const tgtKey = levelKeys[i + 1];

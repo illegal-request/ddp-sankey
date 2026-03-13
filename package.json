@@ -1,6 +1,6 @@
 {
   "name": "sankey-visual",
-  "version": "1.2.45.0",
+  "version": "1.2.46.0",
   "description": "Custom Sankey diagram visual for Power BI",
   "scripts": {
     "pbiviz": "pbiviz",

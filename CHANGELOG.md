@@ -12,6 +12,22 @@ The `.pbiviz` file for each release is attached to the corresponding [GitHub Rel
 
 ---
 
+## [1.2.46.0] — 2026-03-12
+
+### Changed
+- **Hide Blank Nodes — level-0 blanks now preserved** — when Hide Blank Nodes
+  is on, a blank value in the first column (level 0) is no longer excluded.
+  It appears as a `(Blank)` node in column 0 with its flows to non-blank
+  column-1 nodes intact, so the entire dataset is accounted for in the totals.
+
+  The previous rule skipped any link where **either** endpoint was blank.
+  The new rule: skip a link only when the **target** (right side) is blank,
+  or when the **source** is blank at level 1 or deeper.  Blank at level 0 is
+  always kept; blanks at level 1+ still hide flows and terminate paths at the
+  last real node.
+
+---
+
 ## [1.2.45.0] — 2026-03-12
 
 ### Added
